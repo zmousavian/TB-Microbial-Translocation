@@ -1,0 +1,2984 @@
+---
+title: "Elevated plasma lipopolysaccharide concentrations in pulmonary tuberculosis associate with immunometabolic outcomes"
+author: "Zaynab Mousavian"
+date: "September 28, 2026"
+output:
+  html_document: default
+  pdf_document: default
+subtitle: LPS data Analysis
+---
+
+```{r setup, include=FALSE}
+# Set global options for all chunks
+knitr::opts_chunk$set(
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+# Load packages 
+
+```{r}
+library(gt)
+library(readxl)
+library(dplyr)
+library(Hmisc)
+library(reshape2)
+library(circlize)
+library(limma)
+library(ggplot2)
+library(ggrepel)
+library(cowplot)
+library(ggpubr)
+library(lme4)
+library(broom.mixed)
+library(purrr)
+library(lmerTest)
+library(ggplot2)
+library(dplyr)
+library(ggsignif)
+library(tidyr)
+library(dplyr)
+library(circlize)
+library(ComplexHeatmap)
+library(corrplot)
+library(igraph)
+library(ggraph)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(dplyr)
+library(circlize)
+library(ComplexHeatmap)
+library(grid)
+library(ggbreak)
+library(dplyr)
+library(purrr)
+library(broom)
+library(gt)
+library(flextable)
+library(officer)
+library(tibble)
+```
+
+# Functions {.tabset}
+## Function for scatterplot of marker vs. cytokine
+
+```{r}
+plot_cyto_marker <- function(data, method, z, x_title="Plasma cytokine concentration",y_title="LPS (EU/ml)",n=7) {
+  
+  ggplot(data,
+         aes(x = Cytokine, y = Marker, color = Group)) +
+    
+    geom_point(color="darkred") +
+    
+    
+    facet_wrap(~ Pair, scales = "free", ncol = n) +
+    stat_cor(
+      data = subset(data),
+ aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+ method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 1-z,
+      size = 4,
+      color = "darkred"
+    )+
+    
+    stat_cor(
+      data = subset(data, Group == "Stress Hyperglycemia"),
+   aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+   method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 0.94-z,
+      size = 4,
+      color = "#3abbcc"
+    ) +
+    
+    stat_cor(
+      data = subset(data, Group == "Euglycemia"),
+    aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+    method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 0.88-z,
+      size = 4,
+      color = "#ca6332"
+    )  +
+    
+    stat_cor(
+      data = subset(data, Group == "Control"),
+   aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+   method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 0.88-z,
+      size = 3,
+      color = "black"
+    ) +
+    
+    labs(color = "", x = bquote(log[2](.(x_title))), y = bquote(log[10](.(y_title)))) +
+    
+    theme_classic()+
+    theme(legend.position = "bottom")
+}
+```
+
+
+
+## Function for scatterplot of marker vs. cytokine with time
+
+```{r}
+plot_cyto_marker_with_time <- function(data, method, z, x_title="Plasma cytokine concentration",y_title="LPS (EU/ml)",n=4) {
+  
+
+  ggplot(data,
+         aes(x = Cytokine, y = Marker, color = Group)) +
+    
+    geom_point(color = "darkred") +
+    
+    
+    facet_wrap(
+      ~ Pair + time + time2,
+      scales = "free",
+      ncol = n,
+      labeller = labeller(
+        time = function(x)
+          paste0("LPS: ", x),
+        time2 = function(x)
+          paste0("Cytokine: ", x)
+      )
+    )+
+    stat_cor(data = subset(data),
+             aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+ method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 1-z,
+      size = 6,
+      color = "darkred"
+    )+
+    
+    stat_cor(
+      data = subset(data, Group == "Stress Hyperglycemia"),
+   aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+   method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 0.94-z,
+      size = 6,
+      color = "#3abbcc"
+    ) +
+    
+    stat_cor(
+      data = subset(data, Group == "Euglycemia"),
+    aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+    method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 0.88-z,
+      size = 6,
+      color = "#ca6332"
+    )  +
+    
+    stat_cor(
+      data = subset(data, Group == "Control"),
+   aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+   method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 0.88-z,
+      size = 6,
+      color = "black"
+    ) +
+    
+    labs(color = "", x = bquote(log[2](.(x_title))), y = bquote(log[10](.(y_title)))) +
+    
+    theme_classic() +
+    theme(
+      axis.text = element_text(size = 18),
+      axis.title = element_text(size = 23),
+      strip.text = element_text(face = "bold", size = 14),
+      legend.position = "none")
+}
+```
+
+
+## Function for scatterplot of LPS vs. marker without facet
+```{r}
+plot_LPS_marker_withoutfacet <- function(data, m, t, method) {
+  
+  data  <- data%>%filter(marker==m,time==t)
+  
+  
+  ggplot(data, aes(x = value, y = LPS, color = Group)) +
+    
+    geom_point(color = "darkred", size = 3) +
+    
+    geom_smooth(
+      method = "lm",
+      se = FALSE,
+      color = "darkred",
+      linewidth = 1
+    ) +
+    
+    stat_cor(
+      data = subset(data),
+      aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+      method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 1,
+      size = 6,
+      color = "darkred"
+    ) +
+    
+    stat_cor(
+      data = subset(data, Group == "Stress Hyperglycemia"),
+      aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+      method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 0.96,
+      size = 6,
+      color = "#3abbcc"
+    ) +
+    
+    stat_cor(
+      data = subset(data, Group == "Euglycemia"),
+      aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+      method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 0.92,
+      size = 6,
+      color = "#ca6332"
+    ) +
+    
+    scale_color_manual(
+      values = c(
+        "Stress Hyperglycemia" = "darkred",
+        "Euglycemia" = "darkred"
+      ),
+      labels = c(
+        "Stress Hyperglycemia" = "TB-stress hyperglycemia",
+        "Euglycemia" = "TB-euglycemia"
+      )
+    ) +
+    
+    labs(
+      color = "",
+      y = bquote(log[10]("LPS (EU/ml)") ~ "at" ~ .(t)),
+      x = paste0(m," at ",t)
+    ) +
+    
+    theme_classic()+
+    theme(axis.text = element_text(size=23),
+         axis.title = element_text(size=23),
+          legend.position = "none")
+}
+```
+
+## Function for scatterplot of delta LPS vs. delta marker
+```{r}
+plot_deltaLPS_deltamarker_withoutfacet <- function(data, m, method) {
+  
+   data  <- data%>%filter(marker==m)
+  ggplot(data,
+         aes(x = deltaLPS, y = value, color = Group)) +
+    
+    geom_point(color="darkred",size=3)  +
+    
+ 
+    stat_cor(
+      data = subset(data),
+      aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+      method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 1,
+      size = 6,
+      color = "darkred"
+    ) +
+    
+    stat_cor(
+      data = subset(data, Group == "Stress Hyperglycemia"),
+      aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+      method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 0.96,
+      size = 6,
+      color = "#3abbcc"
+    ) +
+    
+    stat_cor(
+      data = subset(data, Group == "Euglycemia"),
+      aes(label = paste(..r.label.., ..p.label.., sep = "~`,`~")),
+      method = method,
+      label.x.npc = 0.05,
+      label.y.npc = 0.92,
+      size = 6,
+      color = "#ca6332"
+    ) +
+    
+    scale_color_manual(
+      values = c(
+        "Stress Hyperglycemia" = "darkred",
+        "Euglycemia" = "darkred"
+      ),
+      labels = c(
+        "Stress Hyperglycemia" = "TB-stress hyperglycemia",
+        "Euglycemia" = "TB-euglycemia"
+      )
+    ) +
+    
+    labs(
+      color = "",
+      x = expression(log[10]("LPS at Month 6 / LPS at baseline")),
+      y = paste0("Relative change in ",m," from baseline to Month 6")
+    ) +
+    
+    theme_classic()+
+    theme(axis.text = element_text(size=23),
+         axis.title = element_text(size=23),
+          legend.position = "none")
+}
+```
+
+
+
+## Fucntion for differential correlations between groups
+```{r}
+diff_correlation_test <- function(corr1, corr2, n1, n2) {
+  
+  results <- corr1 %>%
+    rename(r1 = value, p1=p) %>%
+    inner_join(
+      corr2 %>% rename(r2 = value, p2=p),
+      by = c("from", "to")
+    ) %>%
+    mutate(
+      z1 = 0.5 * log((1 + r1) / (1 - r1)),
+      z2 = 0.5 * log((1 + r2) / (1 - r2)),
+    
+      z_diff = (z1 - z2) / sqrt(1/(n1 - 3) + 1/(n2 - 3)),
+      
+      p_value = 2 * pnorm(-abs(z_diff)),
+      
+      FDR = p.adjust(p_value, method = "BH"),
+      
+      direction = case_when(
+        r1 > r2 ~ "Higher in TB-stress hyperglycemia",
+        r1 < r2 ~ "Higher in TB-euglycemia",
+        TRUE ~ "Equal"
+      )
+    ) %>%
+    arrange(FDR)
+  
+  return(results)
+}
+```
+
+
+## Function for visaulizing heatmap plot 
+
+```{r}
+heatmapPlot_func <- function(ClinicalData, CytokineData,
+                             name_col = "Cytokine",
+                             id_col = "SAMPLE.ID",
+                             group_col = "group",
+                             lps_col = "LPS",
+                             logFC_thr = 0,
+                             qval_thr = 0.05,
+                             up_color = "red",
+                             mid_color = "white",
+                             down_color = "blue",
+                             annotation_colors = c(
+                               "Euglycemia" = "#ca6332",
+                               "Stress Hyperglycemia" = "#3abbcc"
+                             ),
+                             row_fontsize = 20,
+                             col_fontsize = 20) {
+  
+  
+  #----------------------------------
+  # Sort samples by group
+  #----------------------------------
+  
+  ClinicalData_sorted <- ClinicalData %>%
+    arrange(.data[[group_col]])
+  
+  sample_sorted <- ClinicalData_sorted %>%
+    pull(.data[[id_col]])
+  
+  
+  #----------------------------------
+  # Heatmap data
+  #----------------------------------
+  
+  input_data <- CytokineData[, sample_sorted, drop = FALSE]
+  
+  input_data[is.na(input_data)] <- 0
+  
+  input_data_scaled <- t(apply(input_data, 1, function(x) {
+    s <- scale(x)
+    if (all(is.na(s))) rep(0, length(x)) else s
+  }))
+  
+  colnames(input_data_scaled) <- colnames(input_data)
+  
+  
+  #----------------------------------
+  # Heatmap colors
+  #----------------------------------
+  
+  color_fun <- colorRamp2(
+    c(4, 0, -4),
+    c(up_color, mid_color, down_color)
+  )
+  
+  #----------------------------------
+  # Annotations
+  #----------------------------------
+  
+  annotation_group <- ClinicalData_sorted[[group_col]]
+  annotation_lps   <- ClinicalData_sorted[[lps_col]]
+  
+  # Color functions
+  lps_color_fun <- colorRamp2(
+    c(
+      min(annotation_lps, na.rm = TRUE),
+      median(annotation_lps, na.rm = TRUE),
+      max(annotation_lps, na.rm = TRUE)
+    ),
+    c("blue", "white", "red")
+  )
+  
+  annotation_colors_list <- list(
+    Group = annotation_colors,
+    LPS = lps_color_fun
+  )
+  
+  column_annotation <- HeatmapAnnotation(
+    
+    Group = annotation_group,
+    LPS = annotation_lps,
+    
+    col = annotation_colors_list,
+    
+    annotation_name_gp = gpar(
+      col = "black",
+      fontsize = 20,
+      fontface = "bold"
+    ),
+    
+    show_legend = TRUE,
+    
+    annotation_legend_param = list(
+      
+      Group = list(
+        title = "Group",
+        title_gp = gpar(
+          fontsize = 26,
+          fontface = "bold"
+        ),
+        labels_gp = gpar(fontsize = 20)
+      ),
+      
+      LPS = list(
+        title = "LPS",
+        title_gp = gpar(
+          fontsize = 26,
+          fontface = "bold"
+        ),
+        labels_gp = gpar(fontsize = 20)
+      )
+    )
+  )
+  
+  
+  #----------------------------------
+  # Heatmap
+  #----------------------------------
+  
+  plot <- Heatmap(
+    input_data_scaled,
+    name = "Z-score",
+    
+    row_names_side = "left",
+    row_names_gp = gpar(
+      fontsize = row_fontsize,
+      col = "black",
+      fontface = "bold"
+    ),
+    
+    row_gap = unit(1.5, "mm"),
+    
+    column_names_gp = gpar(
+      fontsize = col_fontsize
+    ),
+    
+    cluster_columns = FALSE,
+    column_gap = unit(2, "mm"),
+    
+    col = color_fun,
+    
+    cluster_rows = TRUE,
+    show_row_dend = TRUE,
+    
+    show_column_names = FALSE,
+    
+    row_title = NULL,
+    
+    top_annotation = column_annotation,
+    
+    show_heatmap_legend = TRUE,
+    
+    heatmap_legend_param = list(
+      title = "Z-score",
+      title_gp = gpar(
+        fontsize = 26,
+        fontface = "bold"
+      ),
+      labels_gp = gpar(fontsize = 16)
+    )
+  )
+  
+  
+  return(plot)
+}
+```
+
+# Read data
+
+## Read LPS data
+
+```{r}
+LPS_data <- read.csv("../Data/LPS_gut_markers.txt",sep = "\t")
+LPS_data[which(LPS_data$LPS<0.0001),"LPS"] <- 0.006
+LPS_data$SAMPLE.ID <- gsub("_","-",LPS_data$SAMPLE.ID)
+# Exclude MC-0029 as Dzigbordi suggested
+LPS_data <- LPS_data%>%filter(!is.na(LPS),SAMPLE.ID!="MC-0029")
+table(LPS_data$TIME,LPS_data$Cohort)
+```
+
+## Add glycemic group to LPS data
+```{r}
+clinical_data <- read_excel("../Data/MIDSTData_AllPartic_GlycStat_11Jun2026.xlsx")
+# clinical_data <- read_excel("../Data/MIDSTData_AllPartic_GlycStat_24Jul2026.xlsx") identical with this file, no update for LPS data
+clinical_data <- clinical_data%>%rename(glycem_stat = glycem_stat_v7)
+LPS_data$group <- clinical_data[match(LPS_data$SAMPLE.ID,clinical_data$record_id),"glycem_stat"]%>%unlist()
+LPS_data[which(LPS_data$Cohort=="ADIEU"),"group"] <- "Control"
+table(LPS_data%>%select(group,TIME))
+```
+
+## Add clinical outcomes to LPS data
+
+```{r}
+clinical_data_full <- read_excel("../Data/MIDST_ZMR21.xlsx")
+clinical_data_control <- read_excel("../Data/NCTLDADIEUAdipokines-WassimMatheusData_DATA_LABELS_2024-11-11_0928.xlsx")
+clinical_data_control$`Record ID` <- gsub("--1","",clinical_data_control$`Record ID`)
+
+LPS_data$age <- clinical_data_full[match(LPS_data$SAMPLE.ID,clinical_data_full$record_id),"s04_age_BL"]%>%unlist()
+LPS_data$gender <- clinical_data_full[match(LPS_data$SAMPLE.ID,clinical_data_full$record_id),"s04_gender_BL"]%>%unlist()
+LPS_data$bmi <- clinical_data_full[match(LPS_data$SAMPLE.ID,clinical_data_full$record_id),"m02_bmi_BL"]%>%unlist()
+LPS_data$hba1c <- clinical_data_full[match(LPS_data$SAMPLE.ID,clinical_data_full$record_id),"b02_hba1c_BL"]%>%unlist()
+
+samples_control <- LPS_data%>%filter(Cohort=="ADIEU")%>%select(SAMPLE.ID)%>%unlist()
+LPS_data[which(LPS_data$Cohort=="ADIEU"),"age"] <- clinical_data_control[match(samples_control,clinical_data_control$`Record ID`),"Age"]%>%unlist()
+LPS_data[which(LPS_data$Cohort=="ADIEU"),"gender"] <- clinical_data_control[match(samples_control,clinical_data_control$`Record ID`),"Gender"]%>%unlist()%>%recode(
+    "Male (0)" = "0",
+    "Female (1)" = "1"
+  )
+LPS_data[which(LPS_data$Cohort=="ADIEU"),"bmi"] <- clinical_data_control[match(samples_control,clinical_data_control$`Record ID`),"Weight"]%>%unlist()/(clinical_data_control[match(samples_control,clinical_data_control$`Record ID`),"Height"]%>%unlist())^2
+LPS_data[which(LPS_data$Cohort=="ADIEU"),"hba1c"] <- clinical_data_control[match(samples_control,clinical_data_control$`Record ID`),"Baseline HbA1c result"]%>%unlist()
+```
+
+## read cytokine data
+
+```{r}
+l <- load("../Data/cytokine_data_ready.RData")
+```
+
+# Create long format data
+```{r}
+LPS_data$newGroup <- LPS_data$group
+LPS_data[which(LPS_data$group!="Control"),"newGroup"] <- "TB"
+
+long_data <- LPS_data %>%
+  pivot_longer(
+    cols = -c(SAMPLE.ID, TIME, Cohort, group,newGroup,age,gender,bmi,hba1c),
+    names_to = "Marker",
+    values_to = "value"
+  ) %>%
+  mutate(
+    value = as.numeric(as.character(value)),
+    TIME= factor(as.character(TIME),levels=c("BL","M6")),
+    group = factor(as.character(group),levels=c("Control","Euglycemia","Stress Hyperglycemia","Pre-Diabetes","Newly Diagnosed Diabetes")),
+    newGroup = factor(as.character(newGroup),levels=c("Control","TB"))
+  ) %>%
+  filter(!is.na(value))%>%
+  filter(Marker=="LPS")
+```
+
+# Table 1 {.tabset}
+## Age, years
+
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  summarise(
+    age_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(age,na.rm=TRUE),
+      median(age, na.rm = TRUE),
+      quantile(age, 0.25, na.rm = TRUE),
+      quantile(age, 0.75, na.rm = TRUE)
+    )
+  )
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  group_by(Cohort) %>%
+  summarise(
+    age_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(age,na.rm=TRUE),
+      median(age, na.rm = TRUE),
+      quantile(age, 0.25, na.rm = TRUE),
+      quantile(age, 0.75, na.rm = TRUE)
+    )
+  )
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  ggplot(aes(sample = age)) +
+  stat_qq() +
+  stat_qq_line()
+
+shapiro.test(
+  LPS_data %>%
+    filter(TIME != "M6") %>%
+    pull(age)
+)
+
+wilcox.test(age ~ Cohort,
+            data = LPS_data %>% filter(TIME != "M6"))
+```
+
+## Age group
+
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    age_group = case_when(
+      age < 36 ~ "<36",
+      age >= 36 & age < 51 ~ "36-50",
+      age >= 51 ~ ">= 51"
+    )
+  ) %>%
+  count(age_group) %>%
+  mutate(
+    Age_Group = paste0(
+      n, " (",
+      round(100 * n / sum(n), 1),
+      "%)"
+    )
+  ) %>%
+  select(age_group, Age_Group)
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    age_group = case_when(
+      age < 36 ~ "<36",
+      age >= 36 & age < 51 ~ "36-50",
+      age >= 51 ~ ">= 51"
+    )
+  ) %>%
+  count(Cohort, age_group) %>%
+  group_by(Cohort)%>%
+  mutate(
+    Age_Group = paste0(
+      n, " (",
+      round(100 * n / sum(n), 1),
+      "%)"
+    )
+  ) %>%
+  select(age_group, Age_Group)
+
+tab <- table(
+  LPS_data$Cohort,
+  cut(
+    LPS_data$age,
+    breaks = c(-Inf, 36, 51, Inf),
+    labels = c("<36", "36-50", ">=51"),
+    right = FALSE
+  )
+)
+
+chisq.test(tab)
+```
+
+## Gender
+
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  summarise(
+    Female = paste0(
+      sum(gender == "1", na.rm = TRUE),
+      " (",
+      round(100 * mean(gender == "1", na.rm = TRUE), 1),
+      "%)"
+    )
+  )
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  summarise(
+    Male = paste0(
+      sum(gender == "0", na.rm = TRUE),
+      " (",
+      round(100 * mean(gender == "0", na.rm = TRUE), 1),
+      "%)"
+    )
+  )
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  group_by(Cohort) %>%
+  summarise(
+    Male = paste0(
+      sum(gender == "0", na.rm = TRUE),
+      " (",
+      round(100 * mean(gender == "0", na.rm = TRUE), 1),
+      "%)"
+    )
+  )
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  group_by(Cohort) %>%
+  summarise(
+    Female = paste0(
+      sum(gender == "1", na.rm = TRUE),
+      " (",
+      round(100 * mean(gender == "1", na.rm = TRUE), 1),
+      "%)"
+    )
+  )
+
+tab <- table(
+  LPS_data$Cohort[LPS_data$TIME != "M6"],
+  LPS_data$gender[LPS_data$TIME != "M6"]
+)
+
+chisq.test(tab)
+```
+
+## BMI, kg/m2
+
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  summarise(
+    bmi_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(bmi,na.rm=TRUE),
+      median(bmi, na.rm = TRUE),
+      quantile(bmi, 0.25, na.rm = TRUE),
+      quantile(bmi, 0.75, na.rm = TRUE)
+    )
+  )
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  group_by(Cohort) %>%
+  summarise(
+    bmi_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(bmi,na.rm=TRUE),
+      median(bmi, na.rm = TRUE),
+      quantile(bmi, 0.25, na.rm = TRUE),
+      quantile(bmi, 0.75, na.rm = TRUE)
+    )
+  )
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  ggplot(aes(sample = bmi)) +
+  stat_qq() +
+  stat_qq_line()
+
+shapiro.test(
+  LPS_data %>%
+    filter(TIME != "M6") %>%
+    pull(bmi)
+)
+
+wilcox.test(bmi ~ Cohort,
+            data = LPS_data %>% filter(TIME != "M6"))
+```
+
+## BMI group
+
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    bmi_group = case_when(
+      bmi < 18.5 ~ "Underweight",
+      bmi >= 18.5 & bmi < 25 ~ "Normal",
+      bmi >= 25 & bmi < 29.9 ~ "Overweight" , 
+      bmi > 30 ~ "Obese"
+    )
+  ) %>%
+  count(bmi_group) %>%
+  mutate(
+    Bmi_Group = paste0(
+      n, " (",
+      round(100 * n / sum(n), 1),
+      "%)"
+    )
+  ) %>%
+  select(bmi_group, Bmi_Group)
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    bmi_group = case_when(
+      bmi < 18.5 ~ "Underweight",
+      bmi >= 18.5 & bmi < 25 ~ "Normal",
+      bmi >= 25 & bmi < 29.9 ~ "Overweight" , 
+      bmi > 30 ~ "Obese"
+    )
+  ) %>%
+  count(Cohort,bmi_group) %>%
+  group_by(Cohort)%>%
+  mutate(
+    Bmi_Group = paste0(
+      n, " (",
+      round(100 * n / sum(n), 1),
+      "%)"
+    )
+  ) %>%
+  select(Cohort,bmi_group, Bmi_Group)
+
+tab <- table(
+  LPS_data$Cohort,
+  cut(
+    LPS_data$bmi,
+    breaks = c(-Inf, 18.5, 25, 29.9, Inf),
+    labels = c("Underweight", "Normal", "Overweight","Obese"),
+    right = FALSE
+  )
+)
+
+fisher.test(tab)
+```
+
+## HbA1c
+
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  summarise(
+    hba1c_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(hba1c,na.rm=TRUE),
+      median(hba1c, na.rm = TRUE),
+      quantile(hba1c, 0.25, na.rm = TRUE),
+      quantile(hba1c, 0.75, na.rm = TRUE)
+    )
+  )
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  group_by(Cohort) %>%
+  summarise(
+    hba1c_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(hba1c,na.rm=TRUE),
+      median(hba1c, na.rm = TRUE),
+      quantile(hba1c, 0.25, na.rm = TRUE),
+      quantile(hba1c, 0.75, na.rm = TRUE)
+    )
+  )
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  ggplot(aes(sample = hba1c)) +
+  stat_qq() +
+  stat_qq_line()
+
+shapiro.test(
+  LPS_data %>%
+    filter(TIME != "M6") %>%
+    pull(hba1c)
+)
+
+wilcox.test(hba1c ~ Cohort,
+            data = LPS_data %>% filter(TIME != "M6"))
+```
+
+## HbA1c group
+
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    hba1c_group = case_when(
+      hba1c < 5.7 ~ "Normal",
+      hba1c >= 5.7 & hba1c < 6.5 ~ "Pre-diabetes",
+      hba1c >= 6.5  ~ "Diabetes" 
+    )
+  ) %>%
+  count(hba1c_group) %>%
+  mutate(
+    Hba1c_Group = paste0(
+      n, " (",
+      round(100 * n / sum(n), 1),
+      "%)"
+    )
+  ) %>%
+  select(hba1c_group, Hba1c_Group)
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    hba1c_group = case_when(
+      hba1c < 5.7 ~ "Normal",
+      hba1c >= 5.7 & hba1c < 6.5 ~ "Pre-diabetes",
+      hba1c >= 6.5  ~ "Diabetes" 
+    )
+  ) %>%
+  count(Cohort,hba1c_group) %>%
+  group_by(Cohort)%>%
+  mutate(
+    Hba1c_Group = paste0(
+      n, " (",
+      round(100 * n / sum(n), 1),
+      "%)"
+    )
+  ) %>%
+  select(Cohort,hba1c_group, Hba1c_Group)
+
+tab <- table(
+  LPS_data$Cohort,
+  cut(
+    LPS_data$hba1c,
+    breaks = c(-Inf, 5.7, 6.5, Inf),
+    labels = c("Normal", "Pre-diabetes","Diabetes"),
+    right = FALSE
+  )
+)
+
+fisher.test(tab)
+```
+
+# Table 2 {.tabset}
+## Association LPS with group
+
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  group_by(newGroup) %>%
+  summarise(
+    LPS_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(LPS, na.rm = TRUE),
+      median(LPS, na.rm = TRUE),
+      quantile(LPS, 0.25, na.rm = TRUE),
+      quantile(LPS, 0.75, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  )
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  summarise(
+    LPS_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(LPS, na.rm = TRUE),
+      median(LPS, na.rm = TRUE),
+      quantile(LPS, 0.25, na.rm = TRUE),
+      quantile(LPS, 0.75, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  )
+
+wilcox.test(LPS ~ newGroup,
+            data = LPS_data %>%
+  filter(TIME != "M6"))
+```
+
+## Association LPS with gender
+
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  group_by(gender) %>%
+  summarise(
+    LPS_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(LPS, na.rm = TRUE),
+      median(LPS, na.rm = TRUE),
+      quantile(LPS, 0.25, na.rm = TRUE),
+      quantile(LPS, 0.75, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  )
+
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  group_by(Cohort, gender) %>%
+  summarise(
+    LPS_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(LPS, na.rm = TRUE),
+      median(LPS, na.rm = TRUE),
+      quantile(LPS, 0.25, na.rm = TRUE),
+      quantile(LPS, 0.75, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  )
+
+wilcox.test(LPS ~ gender,
+            data = LPS_data %>%
+  filter(TIME != "M6"))
+
+wilcox.test(LPS ~ gender,
+            data = LPS_data %>%
+  filter(TIME != "M6", Cohort=="MIDST"))
+
+wilcox.test(LPS ~ gender,
+            data = LPS_data %>%
+  filter(TIME != "M6", Cohort=="ADIEU"))
+```
+
+## Association LPS with age group
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    age_group = case_when(
+      age < 36 ~ "<36",
+      age >= 36 & age < 51 ~ "36-50",
+      age >= 51 ~ ">=51"
+    )
+  ) %>%
+  group_by(age_group) %>%
+  summarise(
+    LPS_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(LPS, na.rm = TRUE),
+      median(LPS, na.rm = TRUE),
+      quantile(LPS, 0.25, na.rm = TRUE),
+      quantile(LPS, 0.75, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  )
+
+dat <- LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    age_group = case_when(
+      age < 36 ~ "<36",
+      age >= 36 & age < 51 ~ "36-50",
+      age >= 51 ~ ">=51"
+    )
+  )
+kruskal.test(LPS ~ age_group, data = dat)
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    age_group = case_when(
+      age < 36 ~ "<36",
+      age >= 36 & age < 51 ~ "36-50",
+      age >= 51 ~ ">=51"
+    )
+  ) %>%
+  group_by(Cohort, age_group) %>%
+  summarise(
+    LPS_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(LPS, na.rm = TRUE),
+      median(LPS, na.rm = TRUE),
+      quantile(LPS, 0.25, na.rm = TRUE),
+      quantile(LPS, 0.75, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  )
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    age_group = case_when(
+      age < 36 ~ "<36",
+      age >= 36 & age < 51 ~ "36-50",
+      age >= 51 ~ ">=51"
+    )
+  ) %>%
+  group_by(Cohort) %>%
+  summarise(
+    p_value = kruskal.test(LPS ~ age_group)$p.value
+  )
+```
+
+## Association LPS with BMI group
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    bmi_group = case_when(
+      bmi < 18.5 ~ "Underweight",
+      bmi >= 18.5 & bmi < 25 ~ "Normal",
+      bmi >= 25 & bmi < 29.9 ~ "Overweight" , 
+      bmi > 30 ~ "Obese"
+    )
+  ) %>%
+  group_by(bmi_group) %>%
+  summarise(
+    LPS_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(LPS, na.rm = TRUE),
+      median(LPS, na.rm = TRUE),
+      quantile(LPS, 0.25, na.rm = TRUE),
+      quantile(LPS, 0.75, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  )
+
+dat <- LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    bmi_group = case_when(
+      bmi < 18.5 ~ "Underweight",
+      bmi >= 18.5 & bmi < 25 ~ "Normal",
+      bmi >= 25 & bmi < 29.9 ~ "Overweight" , 
+      bmi > 30 ~ "Obese"
+    )
+  )
+kruskal.test(LPS ~ bmi_group, data = dat)
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    bmi_group = case_when(
+      bmi < 18.5 ~ "Underweight",
+      bmi >= 18.5 & bmi < 25 ~ "Normal",
+      bmi >= 25 & bmi < 29.9 ~ "Overweight" , 
+      bmi > 30 ~ "Obese"
+    )
+  ) %>%
+  group_by(Cohort, bmi_group) %>%
+  summarise(
+    LPS_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(LPS, na.rm = TRUE),
+      median(LPS, na.rm = TRUE),
+      quantile(LPS, 0.25, na.rm = TRUE),
+      quantile(LPS, 0.75, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  )
+
+LPS_data %>%
+  filter(TIME != "M6", Cohort=="MIDST") %>%
+  mutate(
+    bmi_group = case_when(
+      bmi < 18.5 ~ "Underweight",
+      bmi >= 18.5 & bmi < 25 ~ "Normal",
+      bmi >= 25 & bmi < 29.9 ~ "Overweight" , 
+      bmi > 30 ~ "Obese"
+    )
+  ) %>%
+  summarise(
+    p_value = kruskal.test(LPS ~ bmi_group)$p.value
+  )
+
+LPS_data %>%
+  filter(TIME != "M6", Cohort=="ADIEU") %>%
+  mutate(
+    bmi_group = case_when(
+      bmi >= 18.5 & bmi < 25 ~ "Normal",
+      bmi >= 25 & bmi < 29.9 ~ "Overweight" , 
+      bmi > 30 ~ "Obese"
+    )
+  ) %>%
+  summarise(
+    p_value = kruskal.test(LPS ~ bmi_group)$p.value
+  )
+```
+
+## Association LPS with HbA1c group
+```{r}
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+     hba1c_group = case_when(
+      hba1c < 5.7 ~ "Normal",
+      hba1c >= 5.7 & hba1c < 6.5 ~ "Pre-diabetes",
+      hba1c >= 6.5  ~ "Diabetes" 
+    )
+  ) %>%
+  group_by(hba1c_group) %>%
+  summarise(
+    LPS_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(LPS, na.rm = TRUE),
+      median(LPS, na.rm = TRUE),
+      quantile(LPS, 0.25, na.rm = TRUE),
+      quantile(LPS, 0.75, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  )
+
+dat <- LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+     hba1c_group = case_when(
+      hba1c < 5.7 ~ "Normal",
+      hba1c >= 5.7 & hba1c < 6.5 ~ "Pre-diabetes",
+      hba1c >= 6.5  ~ "Diabetes" 
+    )
+  )
+kruskal.test(LPS ~ hba1c_group, data = dat)
+
+LPS_data %>%
+  filter(TIME != "M6") %>%
+  mutate(
+    hba1c_group = case_when(
+      hba1c < 5.7 ~ "Normal",
+      hba1c >= 5.7 & hba1c < 6.5 ~ "Pre-diabetes",
+      hba1c >= 6.5  ~ "Diabetes" 
+    )
+  ) %>%
+  group_by(Cohort, hba1c_group) %>%
+  summarise(
+    LPS_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(LPS, na.rm = TRUE),
+      median(LPS, na.rm = TRUE),
+      quantile(LPS, 0.25, na.rm = TRUE),
+      quantile(LPS, 0.75, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  )
+
+LPS_data %>%
+  filter(TIME != "M6", Cohort=="MIDST") %>%
+  mutate(
+     hba1c_group = case_when(
+      hba1c < 5.7 ~ "Normal",
+      hba1c >= 5.7 & hba1c < 6.5 ~ "Pre-diabetes",
+      hba1c >= 6.5  ~ "Diabetes" 
+    )
+  ) %>%
+  summarise(
+    p_value = kruskal.test(LPS ~ hba1c_group)$p.value
+  )
+```
+
+# Figure 1 {.tabset}
+## LPS levels in TB at BL and M6 and controls
+
+```{r}
+input_data <- long_data
+
+input_data %>%
+  group_by(Cohort, TIME) %>%
+  summarise(
+    age_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(value,na.rm=TRUE),
+      median(value, na.rm = TRUE),
+      quantile(value, 0.25, na.rm = TRUE),
+      quantile(value, 0.75, na.rm = TRUE)
+    )
+  )
+
+input_data <- long_data
+input_data %>%
+  group_by(Cohort, group, TIME) %>%
+  summarise(
+    age_summary = sprintf(
+      "%.2f %.2f (%.2f–%.2f)",
+      mean(value,na.rm=TRUE),
+      median(value, na.rm = TRUE),
+      quantile(value, 0.25, na.rm = TRUE),
+      quantile(value, 0.75, na.rm = TRUE)
+    )
+  )
+
+input_data %>%
+  filter(TIME != "M6") %>%
+  ggplot(aes(sample = value)) +
+  stat_qq() +
+  stat_qq_line()
+
+shapiro.test(
+  input_data %>%
+    filter(TIME != "M6") %>%
+    pull(value)
+)
+
+wilcox.test(value ~ Cohort,
+            data = input_data %>% filter(TIME != "M6"))
+```
+
+## Plot for LPS in TB vs. control
+
+```{r}
+input_data <- long_data
+input_data$newTIME <- paste0(input_data$TIME,input_data$newGroup)
+input_data$newTIME <- factor(input_data$newTIME,levels=c("BLTB","M6TB","BLControl"))
+input_data$value <- log10(input_data$value)
+
+input_data %>%
+  group_by(newGroup,TIME) %>%
+  summarise(
+    W = shapiro.test(value)$statistic,
+    p.value = shapiro.test(value)$p.value
+  )
+
+Figure1 <- ggplot(input_data, aes(x = newTIME, y = value, fill=newGroup)) +
+  
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  
+  geom_jitter(
+    aes(color = newGroup),
+    position = position_jitter(width = 0.1),
+    size = 3,
+    alpha = 0.8
+  ) +
+  
+ scale_fill_manual(values = c(
+    "Control" = "black",
+    "TB" = "darkred"
+  ),labels=c(
+    "Control"="Asymptomatic non-TB controls",
+    "TB" = "TB")) +
+  
+  scale_color_manual(values = c(
+    "Control" = "black",
+     "TB" = "darkred"
+  ), labels=c(
+     "Control"="Asymptomatic non-TB controls",
+     "TB" = "TB")) +
+  
+  stat_compare_means(
+    comparisons = list(c("BLTB", "BLControl"),c("BLTB", "M6TB"),c("M6TB", "BLControl")),
+    method = "wilcox.test",
+    label = "p.signif",
+    hide.ns = FALSE,
+   step.increase = 0.06,
+   size = 6
+  ) +
+  scale_x_discrete(labels = c(
+    "BLTB" = "PTB at Baseline",
+    "M6TB" = "PTB at Month 6",
+    "BLControl" = "non-TB controls"
+    
+  )) +
+  theme_classic() +
+  theme(legend.position = "none")+
+  labs(x = "", y =expression(log[10]("LPS (EU/ml)")), color = "",fill="")+
+  theme(
+  axis.text = element_text(size=26),
+  axis.title = element_text(size=26),
+  legend.position = "none",
+  axis.line.x.top = element_blank(),
+  axis.text.x.top = element_blank(),
+  axis.ticks.x.top = element_blank(),
+  axis.title.x.top = element_blank()
+)
+```
+
+## Make Figure 1
+
+```{r}
+pdf("../Results/New Manuscript/Figure 1.pdf",width=11,height = 11)
+Figure1
+dev.off()
+```
+
+
+
+# Table 3: Regression analysis {.tabset}
+### Association between LPS and TB at baseline
+
+```{r}
+input_data <- long_data%>%
+  filter(TIME=="BL")
+model <- lm(log10(value) ~ newGroup + age + gender + bmi ,data = input_data)
+summary_model <- summary(model)
+
+tbl <- data.frame(
+    outcome = "LPS",
+    term = rownames(summary_model$coefficients),
+    estimate = summary_model$coefficients[,1],
+    std.error = summary_model$coefficients[,2],
+    p.value = summary_model$coefficients[,4]
+  )%>%filter(term!="(Intercept)")%>%
+  gt()%>%
+  tab_header(
+    title = "Linear Regression",
+    subtitle = "Model at BL: LPS ~ newGroup + age + gender + bmi"
+  )
+```
+
+### Association between LPS and TB at month 6
+
+```{r}
+input_data <- long_data%>%
+  filter(TIME=="M6"|newGroup=="Control")
+model <- lm(log10(value) ~ newGroup + age + gender + bmi ,data = input_data)
+summary_model <- summary(model)
+
+tbl <- data.frame(
+    outcome = "LPS",
+    term = rownames(summary_model$coefficients),
+    estimate = summary_model$coefficients[,1],
+    std.error = summary_model$coefficients[,2],
+    p.value = summary_model$coefficients[,4]
+  )%>%filter(term!="(Intercept)")%>%
+  gt()%>%
+  tab_header(
+    title = "Linear Regression",
+    subtitle = "Model at M6: LPS ~ newGroup + age + gender + bmi"
+  )
+```
+
+# Figure 2 {.tabset}
+## Panel a: not broken y axis only for BL 
+```{r}
+input_data <- long_data%>%
+  filter(TIME == "BL")%>%
+  filter(group=="Euglycemia"|group=="Stress Hyperglycemia"|group=="Control")
+input_data$value <- log10(input_data$value)
+
+input_data %>%
+  group_by(group) %>%
+  summarise(
+    W = shapiro.test(value)$statistic,
+    p.value = shapiro.test(value)$p.value
+  )
+
+Figure2_a <- input_data %>%
+  ggplot(aes(x = group, y = value, fill = group)) +
+  
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(aes(color = group),
+              position = position_jitter(width = 0.1),
+              size = 3, alpha = 0.8) +
+  
+  stat_compare_means(
+    comparisons = list(
+      c("Stress Hyperglycemia", "Euglycemia"),
+      c("Stress Hyperglycemia", "Control"),
+      c("Euglycemia", "Control")
+    ),
+    method = "wilcox.test",
+    label = "p.signif",
+    size=6
+  ) +
+  scale_fill_manual(values = c(
+    "Control" = "black",
+    "Diabetes" = "#984EA3",
+    "Stress Hyperglycemia" = "#3abbcc",
+    "Euglycemia" = "#ca6332"
+  ),labels=c(
+    "Control"="Asymptomatic non-TB controls",
+    "Diabetes" = "TB-diabetes",
+    "Stress Hyperglycemia" = "TB-stress hyperglycemia",
+    "Euglycemia" = "TB-euglycemia")) +
+  
+  scale_color_manual(values = c(
+    "Control" = "black",
+    "Diabetes" = "#984EA3",
+    "Stress Hyperglycemia" = "#3abbcc",
+    "Euglycemia" = "#ca6332"
+  ), labels=c(
+     "Control"="non-TB controls",
+    "Diabetes" = "TB-diabetes",
+    "Stress Hyperglycemia" = "TB-stress hyperglycemia",
+    "Euglycemia" = "TB-euglycemia")) +
+  
+   scale_x_discrete(labels = c(
+    "Control" = "non-TB controls",
+    "Diabetes" = "TB-diabetes",
+    "Stress Hyperglycemia" = "TB-stress hyperglycemia",
+    "Euglycemia" = "TB-euglycemia"
+  )) +
+  labs(title = "Baseline",y=expression(log[10]("LPS (EU/ml)")),fill="",color="",size=3) +
+  theme_classic()+
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text = element_text(size=23),
+        plot.title = element_text(size = 22, face = "bold"),
+  axis.title = element_text(size=26))
+
+pdf("../Results/New Manuscript/Figure 2-a.pdf",height = 11, width = 11)
+Figure2_a
+dev.off()
+```
+
+## Panel b: not broken y axis only for M6
+
+```{r}
+input_data <- long_data%>%
+  filter(TIME == "M6")%>%
+  filter(group=="Euglycemia"|group=="Stress Hyperglycemia")%>%
+  bind_rows(long_data%>%
+  filter(TIME == "BL",group=="Control")%>%mutate(TIME="M6"))
+
+input_data$value <- log10(input_data$value)
+
+input_data %>%
+  group_by(group) %>%
+  summarise(
+    W = shapiro.test(value)$statistic,
+    p.value = shapiro.test(value)$p.value
+  )
+
+Figure2_b <- input_data %>%
+  ggplot(aes(x = group, y = value, fill = group)) +
+  
+  geom_boxplot(alpha = 0.6, outlier.shape = NA) +
+  geom_jitter(aes(color = group),
+              position = position_jitter(width = 0.1),
+              size = 3, alpha = 0.8) +
+  
+  stat_compare_means(
+    comparisons = list(
+      c("Stress Hyperglycemia", "Euglycemia"),
+      c("Stress Hyperglycemia", "Control"),
+      c("Euglycemia", "Control")
+    ),
+    method = "wilcox.test",
+    label = "p.signif",
+    size=6
+  ) +
+  scale_fill_manual(values = c(
+    "Control" = "black",
+    "Diabetes" = "#984EA3",
+    "Stress Hyperglycemia" = "#3abbcc",
+    "Euglycemia" = "#ca6332"
+  ),labels=c(
+    "Control"="non-TB controls",
+    "Diabetes" = "TB-diabetes",
+    "Stress Hyperglycemia" = "TB-stress hyperglycemia",
+    "Euglycemia" = "TB-euglycemia")) +
+  
+  scale_color_manual(values = c(
+    "Control" = "black",
+    "Diabetes" = "#984EA3",
+    "Stress Hyperglycemia" = "#3abbcc",
+    "Euglycemia" = "#ca6332"
+  ), labels=c(
+     "Control"="non-TB controls",
+    "Diabetes" = "TB-diabetes",
+    "Stress Hyperglycemia" = "TB-stress hyperglycemia",
+    "Euglycemia" = "TB-euglycemia")) +
+   scale_x_discrete(labels = c(
+    "Control" = "non-TB controls",
+    "Diabetes" = "TB-diabetes",
+    "Stress Hyperglycemia" = "TB-stress hyperglycemia",
+    "Euglycemia" = "TB-euglycemia"
+  )) +
+  labs(title = "Month 6",y=expression(log[10]("LPS (EU/ml)")),fill="",color="") +
+  theme_classic()+
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+       # axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text = element_text(size=23),
+        plot.title = element_text(size = 22, face = "bold"),
+  axis.title = element_text(size=26))
+
+
+pdf("../Results/New Manuscript/Figure 2-b.pdf",height = 11, width = 11)
+Figure2_b
+dev.off()
+```
+
+## Panel c : Changes in LPS from BL to M6 in each glycemic group
+
+```{r}
+input_data <- long_data%>%
+  filter(group=="Euglycemia"|group=="Stress Hyperglycemia")
+
+input_data$value <- log10(input_data$value)
+
+stat.test <- input_data %>%
+  group_by(group) %>%
+  summarise(
+    p = wilcox.test(value[TIME == "BL"],
+                    value[TIME == "M6"],paired=TRUE)$p.value,
+    y.position = max(value, na.rm = TRUE) * 1.2,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    p.signif = case_when(
+      p <= 0.001 ~ "***",
+      p <= 0.01  ~ "**",
+      p <= 0.05  ~ "*",
+      TRUE       ~ "ns"
+    ),
+    group1 = "BL",
+    group2 = "M6"
+  )
+
+Figure2_c <- ggplot(input_data, aes(x = TIME, y = value, group = SAMPLE.ID)) +
+  
+  geom_line(alpha = 0.4, color = "gray70") +
+  geom_point(aes(color = group), size = 3, alpha = 0.9) +
+  
+  facet_wrap(~group, scales = "free_y", nrow = 1,
+             labeller = as_labeller(c(
+               "Stress Hyperglycemia" = "TB-stress hyperglycemia",
+               "Euglycemia" = "TB-euglycemia"
+             ))) +
+  
+  scale_color_manual(values = c(
+    "Stress Hyperglycemia" = "#3abbcc",
+    "Euglycemia" = "#ca6332"
+  )) +
+  
+  stat_pvalue_manual(
+    stat.test,
+    label = "p.signif",
+    xmin = "group1",
+    xmax = "group2",
+    y.position = "y.position",
+    inherit.aes = FALSE,
+    size=6
+  ) +
+  
+  scale_x_discrete(labels = c(
+    "BL" = "Baseline",
+    "M6" = "Month 6"
+  )) +
+  theme_classic() +
+  theme( legend.position = "none",
+        axis.title.x = element_blank(),
+       # axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text = element_text(size=23),
+        plot.title = element_text(size = 22, face = "bold"),
+  axis.title = element_text(size=26),
+  strip.text = element_text(size = 22, face = "bold"))+
+  labs(x = "", y = expression(log[10]("LPS (EU/ml)")), color = "")
+
+pdf("../Results/New Manuscript/Figure 2-c.pdf",height = 11, width = 9)
+Figure2_c
+dev.off()
+```
+
+## Make Figure 2
+
+```{r, eval=FALSE}
+Figure2_a <- Figure2_a + coord_cartesian(ylim = c(-2, 3))
+Figure2_b <- Figure2_b + coord_cartesian(ylim = c(-2, 3))
+Figure2_c <- Figure2_c + coord_cartesian(ylim = c(-2, 3))
+
+pdf("../Results/New Manuscript/Figure 2.pdf",height = 11, width = 32)
+plot_grid(Figure2_a,Figure2_b,Figure2_c,labels=c("a","b","c"),label_size = 35,rel_widths = c(1,1,1),align = "h",axis = "tb",nrow = 1)
+dev.off()
+```
+
+# Table 3: Regression analysis {.tabset}
+## Association between glycemic status and LPS at baseline
+
+```{r}
+input_data <- long_data%>%
+  filter(TIME=="BL")%>%
+  filter(group=="Euglycemia"|group=="Stress Hyperglycemia")
+
+model <- lm(log10(value) ~ group + age + gender + bmi ,data = input_data)
+summary_model <- summary(model)
+
+tbl <- data.frame(
+    outcome = "LPS",
+    term = rownames(summary_model$coefficients),
+    estimate = summary_model$coefficients[,1],
+    std.error = summary_model$coefficients[,2],
+    p.value = summary_model$coefficients[,4]
+  )%>%filter(term!="(Intercept)")%>%
+  gt()%>%
+  tab_header(
+    title = "Linear Regression",
+    subtitle = "Model at BL: LPS ~ group + age + gender + bmi"
+  )
+```
+
+## Association between glycemic status and LPS at month 6
+
+```{r}
+input_data <- long_data%>%
+  filter(TIME=="M6")%>%
+  filter(group=="Euglycemia"|group=="Stress Hyperglycemia")
+
+model <- lm(log10(value) ~ group + age + gender + bmi ,data = input_data)
+summary_model <- summary(model)
+
+tbl <- data.frame(
+    outcome = "LPS",
+    term = rownames(summary_model$coefficients),
+    estimate = summary_model$coefficients[,1],
+    std.error = summary_model$coefficients[,2],
+    p.value = summary_model$coefficients[,4]
+  )%>%filter(term!="(Intercept)")%>%
+  gt()%>%
+  tab_header(
+    title = "Linear Regression",
+    subtitle = "Model at M6: LPS ~ group + age + gender + bmi"
+  )
+```
+
+# Figure 3 {.tabset}
+## Make data for LPS at baseline and clinical outcomes
+
+```{r}
+clinical_data_full <- read_excel("../Data/MIDST_ZMR21.xlsx")
+
+LPS_data_BL_MIDST <- LPS_data%>%
+  filter(TIME=="BL",Cohort=="MIDST")
+
+LPS_data_M6_MIDST <- LPS_data%>%
+  filter(TIME=="M6",Cohort=="MIDST")
+
+LPS_data_BL_MIDST$deltaLPS <- log10(LPS_data_M6_MIDST[match(LPS_data_BL_MIDST$SAMPLE.ID,LPS_data_M6_MIDST$SAMPLE.ID),"LPS"])-log10(LPS_data_BL_MIDST[,"LPS"])
+
+clinical_data_full <- clinical_data_full[match(LPS_data_BL_MIDST$SAMPLE.ID,clinical_data_full$record_id),]
+
+clinical_data_full$weightBL <- clinical_data_full$m02_weight_BL
+clinical_data_full$bmiBL <- clinical_data_full$m02_bmi_BL
+clinical_data_full$homairBL <- clinical_data_full$u01_homair_BL
+
+clinical_data_full$delta_weightM2 <- clinical_data_full$m02_weight_M2 - clinical_data_full$m02_weight_BL
+clinical_data_full$delta_bmiM2 <- clinical_data_full$m02_bmi_M2 - clinical_data_full$m02_bmi_BL
+clinical_data_full$delta_homairM2 <- clinical_data_full$u01_homair_M2 - clinical_data_full$u01_homair_BL
+
+clinical_data_full$prop_delta_weightM2 <- (clinical_data_full$m02_weight_M2 - clinical_data_full$m02_weight_BL)/clinical_data_full$m02_weight_BL
+clinical_data_full$prop_delta_bmiM2 <- (clinical_data_full$m02_bmi_M2 - clinical_data_full$m02_bmi_BL)/clinical_data_full$m02_bmi_BL
+clinical_data_full$prop_delta_homairM2 <- (clinical_data_full$u01_homair_M2 - clinical_data_full$u01_homair_BL)/clinical_data_full$u01_homair_BL
+
+clinical_data_full$delta_weightM6 <- clinical_data_full$m02_weight_M6 - clinical_data_full$m02_weight_BL
+clinical_data_full$delta_bmiM6 <- clinical_data_full$m02_bmi_M6 - clinical_data_full$m02_bmi_BL
+clinical_data_full$delta_homairM6 <- clinical_data_full$u01_homair_M6 - clinical_data_full$u01_homair_BL
+
+clinical_data_full$prop_delta_weightM6 <- (clinical_data_full$m02_weight_M6 - clinical_data_full$m02_weight_BL)/clinical_data_full$m02_weight_BL
+clinical_data_full$prop_delta_bmiM6 <- (clinical_data_full$m02_bmi_M6 - clinical_data_full$m02_bmi_BL)/clinical_data_full$m02_bmi_BL
+clinical_data_full$prop_delta_homairM6 <- (clinical_data_full$u01_homair_M6 - clinical_data_full$u01_homair_BL)/clinical_data_full$u01_homair_BL
+clinical_data_full$prop_delta_homairM6 <- (clinical_data_full$u01_homair_M6 - clinical_data_full$u01_homair_BL)
+
+input_data <- data.frame(
+  Sample_ID = LPS_data_BL_MIDST$SAMPLE.ID,
+  LPS = LPS_data_BL_MIDST$LPS,
+  deltaLPS = LPS_data_BL_MIDST$deltaLPS,
+  age = clinical_data_full$s04_age_BL,
+  gender = clinical_data_full$s04_gender_BL,
+  weightBL = clinical_data_full$weightBL,
+  bmiBL = clinical_data_full$bmiBL,
+  homairBL = clinical_data_full$homair_BL,
+  delta_weightM2 = clinical_data_full$delta_weightM2 ,
+  delta_bmiM2 = clinical_data_full$delta_bmiM2,
+  delta_homairM2 = clinical_data_full$delta_homairM2,
+  prop_delta_weightM2 = clinical_data_full$prop_delta_weightM2 ,
+  prop_delta_bmiM2 = clinical_data_full$prop_delta_bmiM2,
+  prop_delta_homairM2 = clinical_data_full$prop_delta_homairM2,
+  delta_weightM6 = clinical_data_full$delta_weightM6 ,
+  delta_bmiM6 = clinical_data_full$delta_bmiM6,
+  delta_homairM6 = clinical_data_full$delta_homairM6,
+  prop_delta_weightM6 = clinical_data_full$prop_delta_weightM6 ,
+  prop_delta_bmiM6 = clinical_data_full$prop_delta_bmiM6,
+  prop_delta_homairM6 = clinical_data_full$prop_delta_homairM6,
+  rel_weight_change_BL_M2=clinical_data_full$rel_weight_change_BL_M2,
+  rel_weight_change_BL_M6=clinical_data_full$rel_weight_change_BL_M6,
+  Group = LPS_data_BL_MIDST$group
+)
+
+input_data_BL <- input_data%>%
+  select(Sample_ID,LPS,weightBL,bmiBL,homairBL,age, gender, Group)%>%
+  mutate(time="BL")%>%
+  rename(Weight=weightBL,BMI=bmiBL,HOMA_IR=homairBL)
+input_data_BL$LPS <- log10(input_data_BL$LPS)
+
+input_data_BL_change <- input_data%>%
+  select(Sample_ID,LPS,rel_weight_change_BL_M2,rel_weight_change_BL_M6,age, gender,Group)%>%
+  mutate(time="BL")%>%
+  rename(WeightBLM2=rel_weight_change_BL_M2,WeightBLM6=rel_weight_change_BL_M6)
+input_data_BL_change$LPS <- log10(input_data_BL_change$LPS)
+
+input_data_BL_change_2 <- input_data%>%
+  select(Sample_ID,deltaLPS,rel_weight_change_BL_M6,prop_delta_bmiM6, prop_delta_homairM6, age, gender, Group)%>%
+  mutate(time="BL")%>%
+  rename(Weight=rel_weight_change_BL_M6,BMI=prop_delta_bmiM6,HOMA_IR=prop_delta_homairM6)
+```
+
+## Make data for LPS at M6 and clinical outcomes
+
+```{r}
+clinical_data_full <- read_excel("../Data/MIDST_ZMR21.xlsx")
+
+LPS_data_M6_MIDST <- LPS_data%>%
+  filter(TIME=="M6",Cohort=="MIDST")
+
+clinical_data_full <- clinical_data_full[match(LPS_data_M6_MIDST$SAMPLE.ID,clinical_data_full$record_id),]
+
+clinical_data_full$weightM6 <- clinical_data_full$m02_weight_M6
+clinical_data_full$bmiM6 <- clinical_data_full$m02_bmi_M6
+clinical_data_full$homairM6 <- clinical_data_full$u01_homair_M6
+
+clinical_data_full$prop_delta_bmiM6 <- (clinical_data_full$m02_bmi_M6 - clinical_data_full$m02_bmi_BL)/clinical_data_full$m02_bmi_BL
+clinical_data_full$prop_delta_homairM6 <- (clinical_data_full$u01_homair_M6 - clinical_data_full$u01_homair_BL)/clinical_data_full$u01_homair_BL
+clinical_data_full$prop_delta_homairM6 <- (clinical_data_full$u01_homair_M6 - clinical_data_full$u01_homair_BL)
+
+
+input_data <- data.frame(
+  Sample_ID = LPS_data_M6_MIDST$SAMPLE.ID,
+  LPS = LPS_data_M6_MIDST$LPS,
+  age = clinical_data_full$s04_age_BL,
+  gender = clinical_data_full$s04_gender_BL,
+  weightM6 = clinical_data_full$weightM6,
+  bmiM6 = clinical_data_full$bmiM6,
+  homairM6 = clinical_data_full$homairM6,
+  prop_delta_bmiM6 = clinical_data_full$prop_delta_bmiM6,
+  prop_delta_homairM6 = clinical_data_full$prop_delta_homairM6,
+  rel_weight_change_BL_M6=clinical_data_full$rel_weight_change_BL_M6,
+  Group = LPS_data_M6_MIDST$group
+)
+
+input_data_M6 <- input_data%>%
+  select(Sample_ID,LPS,weightM6,bmiM6,homairM6,age, gender,prop_delta_bmiM6,prop_delta_homairM6,rel_weight_change_BL_M6, Group)%>%
+  mutate(time="M6")%>%
+  rename(Weight=weightM6,BMI=bmiM6,HOMA_IR=homairM6,deltaWeight=rel_weight_change_BL_M6,deltaBMI=prop_delta_bmiM6,deltaHOMA_IR=prop_delta_homairM6)
+input_data_M6$LPS <- log10(input_data_M6$LPS)
+```
+
+## Make Figure 3
+```{r}
+input_data <- input_data_BL%>%
+  bind_rows(input_data_M6)%>%
+  pivot_longer(
+    cols = c(Weight,BMI,HOMA_IR),
+    names_to = "marker",
+    values_to = "value"
+  )%>%
+  mutate(
+    time = recode(time,
+                  "BL" = "Baseline",
+                  "M6" = "Month 6")
+  )
+
+input_data$marker <- factor(input_data$marker,levels=c("Weight","BMI","HOMA_IR"))
+Figure3_a <- plot_LPS_marker_withoutfacet(input_data, m="Weight",t="Baseline",method="spearman")
+Figure3_b <- plot_LPS_marker_withoutfacet(input_data, m="BMI",t="Baseline",method="spearman")
+Figure3_c <- plot_LPS_marker_withoutfacet(input_data, m="HOMA_IR",t="Baseline",method="spearman")
+Figure3_d <- plot_LPS_marker_withoutfacet(input_data, m="Weight",t="Month 6",method="spearman")
+Figure3_e <- plot_LPS_marker_withoutfacet(input_data, m="BMI",t="Month 6",method="spearman")
+Figure3_f <- plot_LPS_marker_withoutfacet(input_data, m="HOMA_IR",t="Month 6",method="spearman")
+
+pdf("../Results/New Manuscript/Figure 3.pdf",height =12, width = 18)
+plot_grid(Figure3_b,Figure3_c,Figure3_e,Figure3_f,labels=c("a","b","c","d"),label_size = 20,rel_widths = c(1,1),align = "h",axis = "tb",nrow = 2)
+dev.off()
+```
+
+## Make Supplementary Figure 1
+
+```{r}
+input_data_BL_change_2_long <- input_data_BL_change_2%>%
+  pivot_longer(
+    cols = c(Weight,BMI,HOMA_IR),
+    names_to = "marker",
+    values_to = "value"
+  )%>%
+  mutate(
+    time = recode(time,
+                  "BL" = "Baseline",
+                  "M6" = "Month 6")
+  )
+input_data_BL_change_2_long$marker <- factor(input_data_BL_change_2_long$marker,levels=c("Weight","BMI","HOMA_IR"))
+Figure3_g <- plot_deltaLPS_deltamarker_withoutfacet(input_data_BL_change_2_long,"Weight",method="spearman")
+Figure3_h <- plot_deltaLPS_deltamarker_withoutfacet(input_data_BL_change_2_long,"BMI",method="spearman")
+Figure3_i <- plot_deltaLPS_deltamarker_withoutfacet(input_data_BL_change_2_long,"HOMA_IR",method="spearman")
+pdf("../Results/New Manuscript/Supplementary Figure 1.pdf",height = 10, width = 18)
+plot_grid(Figure3_h,Figure3_i,labels=c("a","b"),label_size = 20,rel_widths = c(1,1,1),align = "h",axis = "tb",nrow = 1)
+dev.off()
+```
+
+# Table 4: Regression analysis {.tabset}
+## Association between LPS and clinical outcomes at baseline 
+```{r}
+outcomes <- c(
+  "Weight",
+  "BMI",
+  "HOMA_IR"
+)
+
+results <- setNames(
+  lapply(outcomes, function(var) {
+    lm(as.formula(paste("LPS ~ ", var,"+ age + gender + Group")), data = input_data_BL)
+  }),
+  outcomes
+)
+
+all_results <- lapply(names(results), function(v) {
+  summary_model <- summary(results[[v]])
+  
+  data.frame(
+    outcome = "LPS",
+    term = rownames(summary_model$coefficients),
+    estimate = summary_model$coefficients[,1],
+    std.error = summary_model$coefficients[,2],
+    p.value = summary_model$coefficients[,4]
+  )
+})
+
+all_results <- do.call(rbind, all_results)
+tbl <- all_results%>%filter(term!="(Intercept)")%>%
+  gt()%>%
+  tab_header(
+    title = "Linear Regression",
+    subtitle = "Model at BL: LPS ~ var + age + gender + Group"
+  )
+
+table3 <- data.frame(
+  model = character(),
+  term = character(),
+  estimate = numeric(),
+  p_value = numeric(),
+  stringsAsFactors = FALSE
+)
+table3 <- table3 %>%
+  bind_rows(
+    data.frame(
+      model = "LPS ~ Weight + age + gender + Group",
+      term = "Weight",
+      estimate = all_results["Weight","estimate"],
+      p_value = all_results["Weight","p.value"]
+    )
+  )%>%
+  bind_rows(
+    data.frame(
+      model = "LPS ~ BMI + age + gender + Group",
+      term = "BMI",
+      estimate = all_results["BMI", "estimate"],
+      p_value = all_results["BMI", "p.value"]
+    )
+  )%>%
+  bind_rows(
+    data.frame(
+      model = "LPS ~ HOMA_IR + age + gender + Group",
+      term = "HOMA_IR",
+      estimate = all_results["HOMA_IR", "estimate"],
+      p_value = all_results["HOMA_IR", "p.value"]
+    )
+  )
+```
+
+## Association between LPS and clinical outcomes at month 6
+
+```{r}
+outcomes <- c(
+  "Weight",
+  "BMI",
+  "HOMA_IR"
+)
+
+results <- setNames(
+  lapply(outcomes, function(var) {
+    lm(as.formula(paste("LPS ~ ",var, "+ age + gender + Group")), data = input_data_M6)
+  }),
+  outcomes
+)
+
+all_results <- lapply(names(results), function(v) {
+  summary_model <- summary(results[[v]])
+  
+  data.frame(
+    outcome = "LPS",
+    term = rownames(summary_model$coefficients),
+    estimate = summary_model$coefficients[,1],
+    std.error = summary_model$coefficients[,2],
+    p.value = summary_model$coefficients[,4]
+  )
+})
+
+all_results <- do.call(rbind, all_results)
+tbl <- all_results%>%filter(term!="(Intercept)")%>%
+  gt()%>%
+  tab_header(
+    title = "Linear Regression",
+    subtitle = "Model at M6: LPS ~ var + age + gender + Group"
+  )
+
+table3 <- table3 %>%
+  bind_rows(
+    data.frame(
+      model = "LPS ~ Weight + age + gender + Group",
+      term = "Weight",
+      estimate = all_results["Weight","estimate"],
+      p_value = all_results["Weight","p.value"]
+    )
+  )%>%
+  bind_rows(
+    data.frame(
+      model = "LPS ~ BMI + age + gender + Group",
+      term = "BMI",
+      estimate = all_results["BMI", "estimate"],
+      p_value = all_results["BMI", "p.value"]
+    )
+  )%>%
+  bind_rows(
+    data.frame(
+      model = "LPS ~ HOMA_IR + age + gender + Group",
+      term = "HOMA_IR",
+      estimate = all_results["HOMA_IR", "estimate"],
+      p_value = all_results["HOMA_IR", "p.value"]
+    )
+  )
+
+```
+
+# Figure 4 {.tabset}
+## All TB {.tabset}
+### Correlation between LPS at baseline and cytokines at baseline
+
+```{r}
+LPS_data_BL <- LPS_data%>%filter(TIME=="BL", Cohort=="MIDST")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup!="Control")
+LPS_data_BL <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
+cytokine_data_BL <- cytokine_data_BL[match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
+n_BLBL_TB <- nrow(cytokine_data_BL)
+data_1 <- LPS_data_BL%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_BLBL_TB <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p = df_long$p.value)
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_BLBL <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+
+selected_cytokines_BLBL <- df_sig$Cytokine%>%unique()
+df_sig
+```
+
+
+### Correlation between LPS at month 6 and cytokines at month 6
+```{r}
+LPS_data_M6 <- LPS_data%>%filter(TIME=="M6")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6")
+LPS_data_M6 <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
+cytokine_data_M6 <- cytokine_data_M6[match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
+n_M6M6_TB <- nrow(cytokine_data_M6)
+data_1 <- LPS_data_M6%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_M6M6_TB <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p = df_long$p.value)
+
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_M6M6 <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+
+selected_cytokines_M6M6 <- df_sig$Cytokine%>%unique()
+df_sig
+```
+
+### Correlation between LPS at baseline and cytokine at month 6
+```{r}
+LPS_data_BL <- LPS_data%>%filter(TIME=="BL")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6")
+LPS_data_BL_M6 <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
+cytokine_data_BL_M6 <- cytokine_data_M6[match(LPS_data_BL_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
+n_BLM6_TB <- nrow(cytokine_data_BL_M6)
+data_1 <- LPS_data_BL_M6%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_BL_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_BLM6_TB <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p = df_long$p.value)
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_BLM6 <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+
+selected_cytokines_BLM6 <- df_sig$Cytokine%>%unique()
+
+df_sig
+```
+
+### Correlation between LPS at month 6 and cytokine at baseline
+```{r}
+LPS_data_M6 <- LPS_data%>%filter(TIME=="M6")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL")
+LPS_data_M6_BL <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
+cytokine_data_M6_BL <- cytokine_data_BL[match(LPS_data_M6_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
+n_M6BL_TB <- nrow(cytokine_data_M6_BL)
+data_1 <- LPS_data_M6_BL%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_M6_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_M6BL_TB <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p = df_long$p.value)
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_M6BL <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+
+selected_cytokines_M6BL <- df_sig$Cytokine%>%unique()
+
+df_sig
+```
+
+
+## Calculate differential correlations 
+### BLM6
+```{r}
+diff_BLBL <- diff_correlation_test(
+  corr1=corr_BLBL_TB,
+  corr2 = corr_M6M6_TB,
+  n1 = n_BLBL_TB,
+  n2 = n_M6M6_TB
+)
+
+diff_BLBL %>%
+  filter(FDR < 0.05)
+```
+
+## TB-euglycemia {.tabset}
+### Correlation between LPS at baseline and cytokines at baseline 
+
+```{r}
+LPS_data_BL <- LPS_data%>%filter(TIME=="BL", group=="Euglycemia")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup=="Euglycemia")
+LPS_data_BL <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
+cytokine_data_BL <- cytokine_data_BL[match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
+n_BLBL_Euglycemia <- nrow(cytokine_data_BL)
+data_1 <- LPS_data_BL%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_BLBL_Euglycemia <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p=df_long$p.value)
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_BLBL_Euglycemia <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+selected_cytokines_BLBL_Euglycemia <- df_sig$Cytokine%>%unique()
+df_sig
+```
+
+
+### Correlation between LPS at month 6 and cytokines at month 6
+```{r}
+LPS_data_M6 <- LPS_data%>%filter(TIME=="M6",group=="Euglycemia")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6",newGroup=="Euglycemia")
+LPS_data_M6 <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
+cytokine_data_M6 <- cytokine_data_M6[match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
+n_M6M6_Euglycemia <- nrow(cytokine_data_M6)
+data_1 <- LPS_data_M6%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_M6M6_Euglycemia <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p=df_long$p.value)
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_M6M6_Euglycemia <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+
+selected_cytokines_M6M6_Euglycemia <- df_sig$Cytokine%>%unique()
+df_sig
+```
+
+
+### Correlation between LPS at baseline and cytokine at month 6
+```{r}
+LPS_data_BL <- LPS_data%>%filter(TIME=="BL",group=="Euglycemia")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6",newGroup=="Euglycemia")
+LPS_data_BL_M6 <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
+cytokine_data_BL_M6 <- cytokine_data_M6[match(LPS_data_BL_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
+n_BLM6_Euglycemia <- nrow(cytokine_data_BL_M6)
+data_1 <- LPS_data_BL_M6%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_BL_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_BLM6_Euglycemia <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p=df_long$p.value)
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_BLM6_Euglycemia <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+
+selected_cytokines_BLM6_Euglycemia <- df_sig$Cytokine%>%unique()
+
+df_sig
+```
+
+### Correlation between LPS at month 6 and cytokine at baseline
+```{r}
+LPS_data_M6 <- LPS_data%>%filter(TIME=="M6",group=="Euglycemia")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup=="Euglycemia")
+LPS_data_M6_BL <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
+cytokine_data_M6_BL <- cytokine_data_BL[match(LPS_data_M6_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
+n_M6BL_Euglycemia <- nrow(cytokine_data_M6_BL)
+data_1 <- LPS_data_M6_BL%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_M6_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_M6BL_Euglycemia <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p=df_long$p.value)
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_M6BL_Euglycemia <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+
+selected_cytokines_M6BL_Euglycemia <- df_sig$Cytokine%>%unique()
+
+df_sig
+```
+
+
+
+## TB-stress hyperglycemia {.tabset}
+### Correlation between LPS at baseline and cytokines at baseline 
+
+```{r}
+LPS_data_BL <- LPS_data%>%filter(TIME=="BL", group=="Stress Hyperglycemia")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup=="Stress Hyperglycemia")
+LPS_data_BL <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
+cytokine_data_BL <- cytokine_data_BL[match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
+n_BLBL_StressHyperglycemia <- nrow(cytokine_data_BL)
+data_1 <- LPS_data_BL%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_BLBL_StressHyperglycemia <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p=df_long$p.value)
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_BLBL_StressHyperglycemia <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+selected_cytokines_BLBL_StressHyperglycemia <- df_sig$Cytokine%>%unique()
+df_sig
+```
+
+
+### Correlation between LPS at month 6 and cytokines at month 6
+```{r}
+LPS_data_M6 <- LPS_data%>%filter(TIME=="M6",group=="Stress Hyperglycemia")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6",newGroup=="Stress Hyperglycemia")
+LPS_data_M6 <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
+cytokine_data_M6 <- cytokine_data_M6[match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
+n_M6M6_StressHyperglycemia <- nrow(cytokine_data_M6)
+data_1 <- LPS_data_M6%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_M6M6_StressHyperglycemia <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p=df_long$p.value)
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_M6M6_StressHyperglycemia <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+
+selected_cytokines_M6M6_StressHyperglycemia <- df_sig$Cytokine%>%unique()
+df_sig
+```
+
+
+### Correlation between LPS at baseline and cytokine at month 6
+```{r}
+LPS_data_BL <- LPS_data%>%filter(TIME=="BL",group=="Stress Hyperglycemia")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6",newGroup=="Stress Hyperglycemia")
+LPS_data_BL_M6 <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
+cytokine_data_BL_M6 <- cytokine_data_M6[match(LPS_data_BL_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
+n_BLM6_StressHyperglycemia <- nrow(cytokine_data_BL_M6)
+data_1 <- LPS_data_BL_M6%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_BL_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_BLM6_StressHyperglycemia <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p=df_long$p.value)
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_BLM6_StressHyperglycemia <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+
+selected_cytokines_BLM6_StressHyperglycemia <- df_sig$Cytokine%>%unique()
+
+df_sig
+```
+
+### Correlation between LPS at month 6 and cytokine at baseline
+```{r}
+LPS_data_M6 <- LPS_data%>%filter(TIME=="M6",group=="Stress Hyperglycemia")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup=="Stress Hyperglycemia")
+LPS_data_M6_BL <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
+cytokine_data_M6_BL <- cytokine_data_BL[match(LPS_data_M6_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
+n_M6BL_StressHyperglycemia <- nrow(cytokine_data_M6_BL)
+data_1 <- LPS_data_M6_BL%>%select(LPS)
+data_1$LPS <- log10(data_1$LPS)
+data_2 <- cytokine_data_M6_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+
+res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
+
+cor_mat <- res$r[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+p_mat <- res$P[
+  colnames(data_1),
+  colnames(data_2)
+]
+
+df_long <- melt(cor_mat, varnames = c("Marker", "Cytokine"), value.name = "Correlation")
+df_long$p.value <- melt(p_mat)$value
+df_long$adj.p.value <- p.adjust(df_long$p.value,method = "fdr")
+df_long$Cytokine <- row.names(df_long)
+df_long$Marker <- "LPS"
+
+corr_M6BL_StressHyperglycemia <- data.frame(from = df_long$Marker,
+                    to   = df_long$Cytokine,
+                    value = df_long$Correlation,
+                    p=df_long$p.value)
+
+df_sig <- df_long%>%filter(p.value<0.05)
+
+links_M6BL_StressHyperglycemia <- data.frame(from = df_sig$Marker,
+                    to   = df_sig$Cytokine,
+                    value = df_sig$Correlation)
+
+selected_cytokines_M6BL_StressHyperglycemia <- df_sig$Cytokine%>%unique()
+
+df_sig
+```
+
+
+
+
+## Calculate differential correlations {.tabset}
+### BLBL
+```{r}
+diff_BLBL <- diff_correlation_test(
+  corr1=corr_BLBL_StressHyperglycemia,
+  corr2 = corr_BLBL_Euglycemia,
+  n1 = n_BLBL_StressHyperglycemia,
+  n2 = n_BLBL_Euglycemia
+)
+```
+
+### BLM6
+```{r}
+diff_BLM6 <- diff_correlation_test(
+  corr1=corr_BLM6_StressHyperglycemia,
+  corr2 = corr_BLM6_Euglycemia,
+  n1 = n_BLM6_StressHyperglycemia,
+  n2 = n_BLM6_Euglycemia
+)
+```
+
+### M6BL
+```{r}
+diff_M6BL <- diff_correlation_test(
+  corr1=corr_M6BL_StressHyperglycemia,
+  corr2 = corr_M6BL_Euglycemia,
+  n1 = n_M6BL_StressHyperglycemia,
+  n2 = n_M6BL_Euglycemia
+)
+```
+
+### M6M6
+```{r}
+diff_M6M6 <- diff_correlation_test(
+  corr1=corr_M6M6_StressHyperglycemia,
+  corr2 = corr_M6M6_Euglycemia,
+  n1 = n_M6M6_StressHyperglycemia,
+  n2 = n_M6M6_Euglycemia
+)
+
+```
+
+## Make Figure 4:Chord plot for all cytokines in all participants
+
+```{r}
+df <- rbind(
+  diff_BLBL %>% mutate(time = "baseline", time2 = "baseline"),
+  diff_BLM6 %>% mutate(time = "baseline", time2 = "month 6"),
+  diff_M6BL %>% mutate(time = "month 6", time2 = "baseline"),
+  diff_M6M6 %>% mutate(time = "month 6", time2 = "month 6")
+) %>%
+  mutate(
+    diff = r1 - r2,  
+    edge_width = abs(diff),
+    group = ifelse(diff > 0,
+                   "stress-hyperglycemia",
+                   "euglycemia")
+  ) %>%
+  filter(p_value < 0.05,(p1 < 0.05 | p2 < 0.05))
+
+
+df$from_id <- paste0(df$from, "_", df$time)
+df$to_id   <- paste0(df$to, "_", df$time2)
+
+label_map <- c(
+  setNames(df$from, df$from_id),
+  setNames(df$to, df$to_id)
+)
+
+marker_BL <- sort(unique(df$from_id[grepl("_baseline$", df$from_id)]))
+marker_M6 <- sort(unique(df$from_id[grepl("_month 6$", df$from_id)]))
+
+cyto_BL <- sort(unique(df$to_id[grepl("_baseline$", df$to_id)]))
+cyto_M6 <- sort(unique(df$to_id[grepl("_month 6$", df$to_id)]))
+
+sector_order <- c(marker_BL, marker_M6, cyto_BL, cyto_M6)
+
+grid.col <- c(
+  setNames(rep("orange", length(marker_BL)), marker_BL),
+  setNames(rep("lightcoral", length(marker_M6)), marker_M6),
+  setNames(rep("yellowgreen", length(cyto_BL)), cyto_BL),
+  setNames(rep("lightblue", length(cyto_M6)), cyto_M6)
+)
+
+
+group_cols <- c(
+  "stress-hyperglycemia" = "#3abbcc",
+  "euglycemia" = "#ca6332"
+)
+
+link_col <- group_cols[df$group]
+
+link_lwd <- scales::rescale(df$edge_width, to = c(1, 8))
+
+lgd_cor <- Legend(
+  title = "Differential correlation strength (p-value < 0.05)",
+  legend_gp = gpar(fill = c(
+    group_cols["stress-hyperglycemia"],
+    group_cols["euglycemia"]
+  )),
+  labels = c(
+    "Stronger in TB-stress hyperglycemia",
+    "Stronger in TB-euglycemia"
+  ),
+  title_gp = gpar(fontsize = 26, fontface = "bold"),
+  labels_gp = gpar(fontsize = 26, fontface = "bold")
+)
+
+lgd_sectors <- Legend(
+  title = "",
+  at = c(
+    "LPS markers (baseline)",
+    "LPS markers (month 6)",
+    "Cytokines (baseline)",
+    "Cytokines (month 6)"
+  ),
+  legend_gp = gpar(fill = c(
+    "orange",
+    "lightcoral",
+    "yellowgreen",
+    "lightblue"
+  )),
+  labels_gp = gpar(fontsize = 26, fontface = "bold")
+)
+
+pdf("../Results/New Manuscript/Figure 4.pdf",
+    width = 25, height = 30)
+
+circos.clear()
+circos.par(
+  gap.degree = 2,
+  start.degree = 90
+)
+
+par(mar = c(0,0,0,0))
+
+
+chordDiagram(
+  df[, c("from_id", "to_id", "diff")],
+  order = sector_order,
+  grid.col = grid.col,
+  col = link_col,
+  transparency = 0,
+  link.lwd = link_lwd,
+  annotationTrack = "grid",
+  preAllocateTracks = 1
+)
+
+
+circos.trackPlotRegion(
+  track.index = 1,
+  panel.fun = function(x, y) {
+    sector.name <- get.cell.meta.data("sector.index")
+    
+    circos.text(
+      x = get.cell.meta.data("xcenter"),
+      y = get.cell.meta.data("ylim")[1],
+      labels = label_map[sector.name],
+      facing = "clockwise",
+      niceFacing = TRUE,
+      adj = c(0, 0.5),
+      cex = 3.5,
+      font = 2
+    )
+  },
+  bg.border = NA
+)
+
+
+draw(
+  packLegend(lgd_sectors, lgd_cor),
+  x = unit(0.85, "npc"),
+  y = unit(0.85, "npc"),
+  just = c("right", "top")
+)
+
+circos.clear()
+dev.off()
+```
+
+
+## Scatter plots {.tabset}
+### Scatterplot for significant associations between LPS at BL and cytokines at BL in TB only
+
+```{r}
+LPS_data_BL <- LPS_data%>%filter(TIME=="BL",Cohort=="MIDST")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup!="Control")
+LPS_data_BL <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
+cytokine_data_BL <- cytokine_data_BL[match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
+LPS_data_BL$LPS <- log10(LPS_data_BL$LPS)
+selected_cytokines_BLBL <- df%>%filter(time=="baseline",time2=="baseline")%>%pull(to)
+links <- data.frame(from="LPS",to=selected_cytokines_BLBL)
+groups <- LPS_data_BL$group
+
+plot_data_BLBL <- pmap_dfr(
+  links,
+  function(from, to, ...) {
+    
+    if (from %in% "LPS" &&
+        to %in% selected_cytokines_BLBL) {
+      
+      tibble(
+        Marker = LPS_data_BL[[from]],
+        Cytokine   = cytokine_data_BL[[to]],
+        Group    = groups,
+        Pair     = to
+      )
+    }
+  }
+)
+
+plotBLBL <- plot_cyto_marker(plot_data_BLBL,method="spearman", 0)
+pdf("../Results/New Manuscript/Figure 4-BLBL-spearman.pdf",width = 18,height = 6)
+plotBLBL
+dev.off()
+```
+
+### Scatterplot for significant associations between LPS at M6 and cytokines at M6
+
+```{r}
+LPS_data_M6 <- LPS_data%>%filter(TIME=="M6")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6")
+LPS_data_M6 <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
+cytokine_data_M6 <- cytokine_data_M6[match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
+LPS_data_M6$LPS <- log10(LPS_data_M6$LPS)
+
+selected_cytokines_M6M6 <- df%>%filter(time=="month 6",time2=="month 6")%>%pull(to)
+links <- data.frame(from="LPS",to=selected_cytokines_M6M6)
+groups <- LPS_data_M6$group
+
+plot_data_M6M6 <- pmap_dfr(
+  links,
+  function(from, to, ...) {
+    
+    if (from %in% "LPS" &&
+        to %in% selected_cytokines_M6M6) {
+      
+      tibble(
+        Marker = LPS_data_M6[[from]],
+        Cytokine   = cytokine_data_M6[[to]],
+        Group    = groups,
+        Pair     = to
+      )
+    }
+  }
+)
+
+plotM6M6 <- plot_cyto_marker(plot_data_M6M6,method="spearman", 0,n=6)
+pdf("../Results/New Manuscript/Figure 4-M6M6-spearman.pdf",width = 18,height = 6)
+plotM6M6
+dev.off()
+```
+
+### Scatterplot for significant associations between LPS at BL and cytokines at M6
+
+```{r}
+LPS_data_BL <- LPS_data%>%filter(TIME=="BL")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6")
+LPS_data_BL <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
+cytokine_data_M6 <- cytokine_data_M6[match(LPS_data_BL$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
+LPS_data_BL$LPS <- log10(LPS_data_BL$LPS)
+
+selected_cytokines_BLM6 <- df%>%filter(time=="baseline",time2=="month 6")%>%pull(to)
+links <- data.frame(from="LPS",to=selected_cytokines_BLM6)
+groups <- LPS_data_BL$group
+
+plot_data_BLM6 <- pmap_dfr(
+  links,
+  function(from, to, ...) {
+    
+    if (from %in% "LPS" &&
+        to %in% selected_cytokines_BLM6) {
+      
+      tibble(
+        Marker = LPS_data_BL[[from]],
+        Cytokine   = cytokine_data_M6[[to]],
+        Group    = groups,
+        Pair     = to
+      )
+    }
+  }
+)
+
+plotBLM6 <- plot_cyto_marker(plot_data_BLM6,method="spearman",0)
+pdf("../Results/New Manuscript/Figure 4-BLM6-spearman.pdf",width = 18,height = 6)
+plotBLM6
+dev.off()
+```
+
+
+### Scatterplot for significant associations between LPS at M6 and cytokines at BL
+
+```{r}
+LPS_data_M6 <- LPS_data%>%filter(TIME=="M6")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL")
+LPS_data_M6 <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
+cytokine_data_BL <- cytokine_data_BL[match(LPS_data_M6$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
+LPS_data_M6$LPS <- log10(LPS_data_M6$LPS)
+
+selected_cytokines_M6BL <- df%>%filter(time=="month 6",time2=="baseline")%>%pull(to)
+links <- data.frame(from="LPS",to=selected_cytokines_M6BL)
+groups <- LPS_data_M6$group
+
+plot_data_M6BL <- pmap_dfr(
+  links,
+  function(from, to, ...) {
+    
+    if (from %in% "LPS" &&
+        to %in% selected_cytokines_M6BL) {
+      
+      tibble(
+        Marker = LPS_data_M6[[from]],
+        Cytokine   = cytokine_data_BL[[to]],
+        Group    = groups,
+        Pair     = to
+      )
+    }
+  }
+)
+
+plotM6BL <- plot_cyto_marker(plot_data_M6BL,method="spearman", 0)
+pdf("../Results/New Manuscript/Figure 4-M6BL-spearman.pdf",width = 18,height = 6)
+plotM6BL
+dev.off()
+```
+
+### Make Supplementary Figure 2 
+```{r}
+plot_data_BLBL <- plot_data_BLBL%>%mutate(time="baseline",time2="baseline")
+plot_data_BLM6 <- plot_data_BLM6%>%mutate(time="baseline",time2="month 6")
+plot_data_M6BL <- plot_data_M6BL%>%mutate(time="month 6",time2="baseline")
+plot_data_M6M6 <- plot_data_M6M6%>%mutate(time="month 6",time2="month 6")
+plot_data <- plot_data_BLBL%>%
+  bind_rows(plot_data_BLM6)%>%
+  bind_rows(plot_data_M6BL)%>%
+  bind_rows(plot_data_M6M6)
+plot <- plot_cyto_marker_with_time(plot_data,method="spearman",n=5,z=0)
+
+pdf("../Results/New Manuscript/Supplementary Figure 2.pdf",width = 20,height = 18)
+plot
+dev.off()
+```
+
+
+
+### Make Supplementary Figure 3: Heatmap for LPS at baseline and cytokines at baseline
+```{r}
+LPS_data_BL <-LPS_data%>%filter(TIME=="BL", group!="Pre-Diabetes")
+cytokine_data_BL <- cytokine_data_BL%>%filter(SAMPLE.ID%in%LPS_data_BL$SAMPLE.ID)
+row.names(cytokine_data_BL) <- cytokine_data_BL$SAMPLE.ID
+clinical_data_BL <- LPS_data_BL%>%select(SAMPLE.ID,group,LPS)
+cytokine_data_BL <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))%>%t()
+
+pdf("../Results/New Manuscript/Supplementary Figure 3.pdf",width = 20,height = 15)
+heatmapPlot_func(
+  ClinicalData = clinical_data_BL,
+  CytokineData = cytokine_data_BL,
+  lps_col = "LPS"
+)
+dev.off()
+```
+
+### Make Supplementary Figure 4: Heatmap for LPS at month 6 and cytokines at month 6
+
+```{r}
+LPS_data_M6 <- LPS_data%>%filter(TIME=="M6", group!="Pre-Diabetes")
+cytokine_data_M6 <- cytokine_data_M6%>%filter(SAMPLE.ID%in%LPS_data_M6$SAMPLE.ID)
+row.names(cytokine_data_M6) <- cytokine_data_M6$SAMPLE.ID
+clinical_data_M6 <- LPS_data_M6%>%select(SAMPLE.ID,group,LPS)
+cytokine_data_M6 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))%>%t()
+pdf("../Results/New Manuscript/Supplementary Figure 4.pdf",width = 20,height = 15)
+heatmapPlot_func(
+  ClinicalData = clinical_data_M6,
+  CytokineData = cytokine_data_M6,
+  lps_col = "LPS"
+)
+dev.off()
+```
+
