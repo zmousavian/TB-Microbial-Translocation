@@ -63,6 +63,23 @@ library(tibble)
 ```
 
 # Functions {.tabset}
+
+## Data imputation
+
+```{r}
+impute_half_min <- function(df) {
+  df_imputed <- df
+  for (col in names(df)) {
+    if (is.numeric(df[[col]])) {
+      min_val <- min(df[[col]], na.rm = TRUE)
+      half_min <- min_val / 2
+      df_imputed[[col]][is.na(df[[col]])] <- half_min
+    }
+  }
+  return(df_imputed)
+}
+```
+
 ## Function for scatterplot of marker vs. cytokine
 
 ```{r}
@@ -391,20 +408,12 @@ heatmapPlot_func <- function(ClinicalData, CytokineData,
                              col_fontsize = 20) {
   
   
-  #----------------------------------
-  # Sort samples by group
-  #----------------------------------
-  
   ClinicalData_sorted <- ClinicalData %>%
     arrange(.data[[group_col]])
   
   sample_sorted <- ClinicalData_sorted %>%
     pull(.data[[id_col]])
-  
-  
-  #----------------------------------
-  # Heatmap data
-  #----------------------------------
+ 
   
   input_data <- CytokineData[, sample_sorted, drop = FALSE]
   
@@ -417,24 +426,16 @@ heatmapPlot_func <- function(ClinicalData, CytokineData,
   
   colnames(input_data_scaled) <- colnames(input_data)
   
-  
-  #----------------------------------
-  # Heatmap colors
-  #----------------------------------
-  
+
   color_fun <- colorRamp2(
     c(4, 0, -4),
     c(up_color, mid_color, down_color)
   )
   
-  #----------------------------------
-  # Annotations
-  #----------------------------------
   
   annotation_group <- ClinicalData_sorted[[group_col]]
   annotation_lps   <- ClinicalData_sorted[[lps_col]]
   
-  # Color functions
   lps_color_fun <- colorRamp2(
     c(
       min(annotation_lps, na.rm = TRUE),
@@ -476,7 +477,7 @@ heatmapPlot_func <- function(ClinicalData, CytokineData,
       ),
       
       LPS = list(
-        title = "LPS",
+        title = expression(log[10]("LPS")),
         title_gp = gpar(
           fontsize = 26,
           fontface = "bold"
@@ -485,11 +486,6 @@ heatmapPlot_func <- function(ClinicalData, CytokineData,
       )
     )
   )
-  
-  
-  #----------------------------------
-  # Heatmap
-  #----------------------------------
   
   plot <- Heatmap(
     input_data_scaled,
@@ -552,7 +548,7 @@ LPS_data <- LPS_data%>%filter(!is.na(LPS),SAMPLE.ID!="MC-0029")
 table(LPS_data$TIME,LPS_data$Cohort)
 ```
 
-## Add glycemic group to LPS data
+## Add glycemic group to the LPS data
 ```{r}
 clinical_data <- read_excel("../Data/MIDSTData_AllPartic_GlycStat_11Jun2026.xlsx")
 # clinical_data <- read_excel("../Data/MIDSTData_AllPartic_GlycStat_24Jul2026.xlsx") identical with this file, no update for LPS data
@@ -562,7 +558,7 @@ LPS_data[which(LPS_data$Cohort=="ADIEU"),"group"] <- "Control"
 table(LPS_data%>%select(group,TIME))
 ```
 
-## Add clinical outcomes to LPS data
+## Add clinical outcomes to the LPS data
 
 ```{r}
 clinical_data_full <- read_excel("../Data/MIDST_ZMR21.xlsx")
@@ -584,10 +580,21 @@ LPS_data[which(LPS_data$Cohort=="ADIEU"),"bmi"] <- clinical_data_control[match(s
 LPS_data[which(LPS_data$Cohort=="ADIEU"),"hba1c"] <- clinical_data_control[match(samples_control,clinical_data_control$`Record ID`),"Baseline HbA1c result"]%>%unlist()
 ```
 
-## read cytokine data
+## Read cytokine data
 
 ```{r}
-l <- load("../Data/cytokine_data_ready.RData")
+cytokine_data <- read_excel("../Data/Cytokine_results_no_duplicates_11062025.xlsx")
+cytokine_data[which(cytokine_data$Group=="Control"),"TIME"] <- "BL"
+cytokine_data_temp <- cytokine_data%>%dplyr::select(-c(SAMPLE.ID,TIME,Group))
+cytokine_data_temp <- as.data.frame(
+  lapply(cytokine_data_temp, as.numeric),
+)
+colSums(is.na(cytokine_data_temp))
+cytokine_data_temp <- log2(impute_half_min(cytokine_data_temp)+1)
+cytokine_data <- cbind(cytokine_data%>%dplyr::select(c(SAMPLE.ID,TIME,Group)),cytokine_data_temp)
+cytokine_data$TIME <- gsub("FU1","F1",cytokine_data$TIME)
+cytokine_data$TIME <- factor(cytokine_data$TIME,levels=c("BL","M2","M6","F1"))
+cytokine_data$SAMPLE.ID <- gsub("c-","C-",cytokine_data$SAMPLE.ID)
 ```
 
 # Create long format data
@@ -1673,7 +1680,7 @@ dev.off()
 
 ## Make Figure 2
 
-```{r, eval=FALSE}
+```{r}
 Figure2_a <- Figure2_a + coord_cartesian(ylim = c(-2, 3))
 Figure2_b <- Figure2_b + coord_cartesian(ylim = c(-2, 3))
 Figure2_c <- Figure2_c + coord_cartesian(ylim = c(-2, 3))
@@ -1881,7 +1888,7 @@ plot_grid(Figure3_b,Figure3_c,Figure3_e,Figure3_f,labels=c("a","b","c","d"),labe
 dev.off()
 ```
 
-## Make Supplementary Figure 1
+## Make Supplementary Figure 2
 
 ```{r}
 input_data_BL_change_2_long <- input_data_BL_change_2%>%
@@ -1899,7 +1906,7 @@ input_data_BL_change_2_long$marker <- factor(input_data_BL_change_2_long$marker,
 Figure3_g <- plot_deltaLPS_deltamarker_withoutfacet(input_data_BL_change_2_long,"Weight",method="spearman")
 Figure3_h <- plot_deltaLPS_deltamarker_withoutfacet(input_data_BL_change_2_long,"BMI",method="spearman")
 Figure3_i <- plot_deltaLPS_deltamarker_withoutfacet(input_data_BL_change_2_long,"HOMA_IR",method="spearman")
-pdf("../Results/New Manuscript/Supplementary Figure 1.pdf",height = 10, width = 18)
+pdf("../Results/New Manuscript/Supplementary Figure 2.pdf",height = 10, width = 18)
 plot_grid(Figure3_h,Figure3_i,labels=c("a","b"),label_size = 20,rel_widths = c(1,1,1),align = "h",axis = "tb",nrow = 1)
 dev.off()
 ```
@@ -2044,13 +2051,13 @@ table3 <- table3 %>%
 
 ```{r}
 LPS_data_BL <- LPS_data%>%filter(TIME=="BL", Cohort=="MIDST")
-cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup!="Control")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",Group!="Control")
 LPS_data_BL <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
 cytokine_data_BL <- cytokine_data_BL[match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
 n_BLBL_TB <- nrow(cytokine_data_BL)
 data_1 <- LPS_data_BL%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2095,7 +2102,7 @@ cytokine_data_M6 <- cytokine_data_M6[match(LPS_data_M6$SAMPLE.ID,cytokine_data_M
 n_M6M6_TB <- nrow(cytokine_data_M6)
 data_1 <- LPS_data_M6%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2133,14 +2140,14 @@ df_sig
 
 ### Correlation between LPS at baseline and cytokine at month 6
 ```{r}
-LPS_data_BL <- LPS_data%>%filter(TIME=="BL")
+LPS_data_BL <- LPS_data%>%filter(TIME=="BL",Cohort=="MIDST")
 cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6")
 LPS_data_BL_M6 <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
 cytokine_data_BL_M6 <- cytokine_data_M6[match(LPS_data_BL_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
 n_BLM6_TB <- nrow(cytokine_data_BL_M6)
 data_1 <- LPS_data_BL_M6%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_BL_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_BL_M6%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2179,13 +2186,13 @@ df_sig
 ### Correlation between LPS at month 6 and cytokine at baseline
 ```{r}
 LPS_data_M6 <- LPS_data%>%filter(TIME=="M6")
-cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",Group!="Control")
 LPS_data_M6_BL <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
 cytokine_data_M6_BL <- cytokine_data_BL[match(LPS_data_M6_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
 n_M6BL_TB <- nrow(cytokine_data_M6_BL)
 data_1 <- LPS_data_M6_BL%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_M6_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_M6_BL%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2241,13 +2248,13 @@ diff_BLBL %>%
 
 ```{r}
 LPS_data_BL <- LPS_data%>%filter(TIME=="BL", group=="Euglycemia")
-cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup=="Euglycemia")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL")
 LPS_data_BL <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
 cytokine_data_BL <- cytokine_data_BL[match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
 n_BLBL_Euglycemia <- nrow(cytokine_data_BL)
 data_1 <- LPS_data_BL%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2285,13 +2292,13 @@ df_sig
 ### Correlation between LPS at month 6 and cytokines at month 6
 ```{r}
 LPS_data_M6 <- LPS_data%>%filter(TIME=="M6",group=="Euglycemia")
-cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6",newGroup=="Euglycemia")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6")
 LPS_data_M6 <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
 cytokine_data_M6 <- cytokine_data_M6[match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
 n_M6M6_Euglycemia <- nrow(cytokine_data_M6)
 data_1 <- LPS_data_M6%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2330,13 +2337,13 @@ df_sig
 ### Correlation between LPS at baseline and cytokine at month 6
 ```{r}
 LPS_data_BL <- LPS_data%>%filter(TIME=="BL",group=="Euglycemia")
-cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6",newGroup=="Euglycemia")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6")
 LPS_data_BL_M6 <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
 cytokine_data_BL_M6 <- cytokine_data_M6[match(LPS_data_BL_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
 n_BLM6_Euglycemia <- nrow(cytokine_data_BL_M6)
 data_1 <- LPS_data_BL_M6%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_BL_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_BL_M6%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2375,13 +2382,13 @@ df_sig
 ### Correlation between LPS at month 6 and cytokine at baseline
 ```{r}
 LPS_data_M6 <- LPS_data%>%filter(TIME=="M6",group=="Euglycemia")
-cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup=="Euglycemia")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL")
 LPS_data_M6_BL <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
 cytokine_data_M6_BL <- cytokine_data_BL[match(LPS_data_M6_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
 n_M6BL_Euglycemia <- nrow(cytokine_data_M6_BL)
 data_1 <- LPS_data_M6_BL%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_M6_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_M6_BL%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2424,13 +2431,13 @@ df_sig
 
 ```{r}
 LPS_data_BL <- LPS_data%>%filter(TIME=="BL", group=="Stress Hyperglycemia")
-cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup=="Stress Hyperglycemia")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL")
 LPS_data_BL <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
 cytokine_data_BL <- cytokine_data_BL[match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
 n_BLBL_StressHyperglycemia <- nrow(cytokine_data_BL)
 data_1 <- LPS_data_BL%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2468,13 +2475,13 @@ df_sig
 ### Correlation between LPS at month 6 and cytokines at month 6
 ```{r}
 LPS_data_M6 <- LPS_data%>%filter(TIME=="M6",group=="Stress Hyperglycemia")
-cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6",newGroup=="Stress Hyperglycemia")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6")
 LPS_data_M6 <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
 cytokine_data_M6 <- cytokine_data_M6[match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
 n_M6M6_StressHyperglycemia <- nrow(cytokine_data_M6)
 data_1 <- LPS_data_M6%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2513,13 +2520,13 @@ df_sig
 ### Correlation between LPS at baseline and cytokine at month 6
 ```{r}
 LPS_data_BL <- LPS_data%>%filter(TIME=="BL",group=="Stress Hyperglycemia")
-cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6",newGroup=="Stress Hyperglycemia")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6")
 LPS_data_BL_M6 <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
 cytokine_data_BL_M6 <- cytokine_data_M6[match(LPS_data_BL_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
 n_BLM6_StressHyperglycemia <- nrow(cytokine_data_BL_M6)
 data_1 <- LPS_data_BL_M6%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_BL_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_BL_M6%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2558,13 +2565,13 @@ df_sig
 ### Correlation between LPS at month 6 and cytokine at baseline
 ```{r}
 LPS_data_M6 <- LPS_data%>%filter(TIME=="M6",group=="Stress Hyperglycemia")
-cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup=="Stress Hyperglycemia")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL")
 LPS_data_M6_BL <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
 cytokine_data_M6_BL <- cytokine_data_BL[match(LPS_data_M6_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
 n_M6BL_StressHyperglycemia <- nrow(cytokine_data_M6_BL)
 data_1 <- LPS_data_M6_BL%>%select(LPS)
 data_1$LPS <- log10(data_1$LPS)
-data_2 <- cytokine_data_M6_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))
+data_2 <- cytokine_data_M6_BL%>%select(-c(SAMPLE.ID,TIME,Group))
 
 res <- rcorr(as.matrix(data_1), as.matrix(data_2), type = "spearman")
 
@@ -2789,7 +2796,7 @@ dev.off()
 
 ```{r}
 LPS_data_BL <- LPS_data%>%filter(TIME=="BL",Cohort=="MIDST")
-cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",newGroup!="Control")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",Group!="Control")
 LPS_data_BL <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
 cytokine_data_BL <- cytokine_data_BL[match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
 LPS_data_BL$LPS <- log10(LPS_data_BL$LPS)
@@ -2859,7 +2866,7 @@ dev.off()
 ### Scatterplot for significant associations between LPS at BL and cytokines at M6
 
 ```{r}
-LPS_data_BL <- LPS_data%>%filter(TIME=="BL")
+LPS_data_BL <- LPS_data%>%filter(TIME=="BL",Cohort=="MIDST")
 cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6")
 LPS_data_BL <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
 cytokine_data_M6 <- cytokine_data_M6[match(LPS_data_BL$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
@@ -2897,7 +2904,7 @@ dev.off()
 
 ```{r}
 LPS_data_M6 <- LPS_data%>%filter(TIME=="M6")
-cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",Group!="Control")
 LPS_data_M6 <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
 cytokine_data_BL <- cytokine_data_BL[match(LPS_data_M6$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
 LPS_data_M6$LPS <- log10(LPS_data_M6$LPS)
@@ -2929,7 +2936,7 @@ plotM6BL
 dev.off()
 ```
 
-### Make Supplementary Figure 2 
+### Make Supplementary Figure 3
 ```{r}
 plot_data_BLBL <- plot_data_BLBL%>%mutate(time="baseline",time2="baseline")
 plot_data_BLM6 <- plot_data_BLM6%>%mutate(time="baseline",time2="month 6")
@@ -2939,24 +2946,28 @@ plot_data <- plot_data_BLBL%>%
   bind_rows(plot_data_BLM6)%>%
   bind_rows(plot_data_M6BL)%>%
   bind_rows(plot_data_M6M6)
-plot <- plot_cyto_marker_with_time(plot_data,method="spearman",n=5,z=0)
+plot <- plot_cyto_marker_with_time(plot_data,method="spearman",n=3,z=0)
 
-pdf("../Results/New Manuscript/Supplementary Figure 2.pdf",width = 20,height = 18)
+pdf("../Results/New Manuscript/Supplementary Figure 3.pdf",width = 18,height = 18)
 plot
 dev.off()
 ```
 
 
 
-### Make Supplementary Figure 3: Heatmap for LPS at baseline and cytokines at baseline
+### Make Supplementary Figure 4: Heatmap for LPS at baseline and cytokines at baseline
+
 ```{r}
-LPS_data_BL <-LPS_data%>%filter(TIME=="BL", group!="Pre-Diabetes")
-cytokine_data_BL <- cytokine_data_BL%>%filter(SAMPLE.ID%in%LPS_data_BL$SAMPLE.ID)
+LPS_data_BL <- LPS_data%>%filter(TIME=="BL",Cohort=="MIDST",group!="Pre-Diabetes",group!="Newly Diagnosed Diabetes")
+cytokine_data_BL <- cytokine_data%>%filter(TIME=="BL",Group!="Control")
+LPS_data_BL <- LPS_data_BL[which(!is.na(match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID))),]
+cytokine_data_BL <- cytokine_data_BL[match(LPS_data_BL$SAMPLE.ID,cytokine_data_BL$SAMPLE.ID),]
+LPS_data_BL$LPS <- log10(LPS_data_BL$LPS)
 row.names(cytokine_data_BL) <- cytokine_data_BL$SAMPLE.ID
 clinical_data_BL <- LPS_data_BL%>%select(SAMPLE.ID,group,LPS)
-cytokine_data_BL <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))%>%t()
+cytokine_data_BL <- cytokine_data_BL%>%select(-c(SAMPLE.ID,TIME,Group))%>%t()
 
-pdf("../Results/New Manuscript/Supplementary Figure 3.pdf",width = 20,height = 15)
+pdf("../Results/New Manuscript/Supplementary Figure 4.pdf",width = 20,height = 15)
 heatmapPlot_func(
   ClinicalData = clinical_data_BL,
   CytokineData = cytokine_data_BL,
@@ -2965,15 +2976,19 @@ heatmapPlot_func(
 dev.off()
 ```
 
-### Make Supplementary Figure 4: Heatmap for LPS at month 6 and cytokines at month 6
+### Make Supplementary Figure 5: Heatmap for LPS at month 6 and cytokines at month 6
 
 ```{r}
-LPS_data_M6 <- LPS_data%>%filter(TIME=="M6", group!="Pre-Diabetes")
-cytokine_data_M6 <- cytokine_data_M6%>%filter(SAMPLE.ID%in%LPS_data_M6$SAMPLE.ID)
+LPS_data_M6 <- LPS_data%>%filter(TIME=="M6",Cohort=="MIDST",group!="Pre-Diabetes",group!="Newly Diagnosed Diabetes")
+cytokine_data_M6 <- cytokine_data%>%filter(TIME=="M6")
+LPS_data_M6 <- LPS_data_M6[which(!is.na(match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID))),]
+cytokine_data_M6 <- cytokine_data_M6[match(LPS_data_M6$SAMPLE.ID,cytokine_data_M6$SAMPLE.ID),]
+LPS_data_M6$LPS <- log10(LPS_data_M6$LPS)
 row.names(cytokine_data_M6) <- cytokine_data_M6$SAMPLE.ID
 clinical_data_M6 <- LPS_data_M6%>%select(SAMPLE.ID,group,LPS)
-cytokine_data_M6 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,newGroup,newGroup2))%>%t()
-pdf("../Results/New Manuscript/Supplementary Figure 4.pdf",width = 20,height = 15)
+cytokine_data_M6 <- cytokine_data_M6%>%select(-c(SAMPLE.ID,TIME,Group))%>%t()
+
+pdf("../Results/New Manuscript/Supplementary Figure 5.pdf",width = 20,height = 15)
 heatmapPlot_func(
   ClinicalData = clinical_data_M6,
   CytokineData = cytokine_data_M6,
